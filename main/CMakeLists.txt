@@ -38,7 +38,8 @@ idf_component_register(
         esp_netif
         esp_event
         nvs_flash
-        # HTTPS client + TLS (esp_tls and mbedtls are transitive deps of esp_http_client)
+        # HTTPS client + TLS (esp_tls is a transitive dep of esp_http_client)
         esp_http_client
+        mbedtls
         lwip
 )

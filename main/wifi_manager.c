@@ -18,6 +18,7 @@
 #include "esp_event.h"
 #include "esp_log.h"
 #include "esp_netif.h"
+#include "esp_sntp.h"
 #include "esp_wifi.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/event_groups.h"
@@ -63,6 +64,14 @@ static void wifi_event_handler(void *arg, esp_event_base_t event_base,
     ip_event_got_ip_t *event = (ip_event_got_ip_t *)event_data;
     esp_ip4addr_ntoa(&event->ip_info.ip, s_ip_str, sizeof(s_ip_str));
     ESP_LOGI(TAG, "Got IP: %s", s_ip_str);
+    
+    /* Initialize SNTP for valid timestamps */
+    if (!esp_sntp_enabled()) {
+      esp_sntp_setoperatingmode(SNTP_OPMODE_POLL);
+      esp_sntp_setservername(0, "pool.ntp.org");
+      esp_sntp_init();
+    }
+    
     xEventGroupSetBits(g_system_event_group, EVT_WIFI_CONNECTED);
   }
 }

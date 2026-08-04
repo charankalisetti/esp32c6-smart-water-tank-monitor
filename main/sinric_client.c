@@ -2,13 +2,15 @@
  * @file sinric_client.c
  * @brief Sinric Pro Google Home integration via WebSocket over esp_tls.
  *
- * Implements a minimal RFC-6455 WebSocket client on top of esp_tls so
- * no external library is required.  The handshake sends the Sinric Pro
- * authentication headers (appkey, deviceids, platform, version) and then
- * sends JSON "sendTemperatureEvent" frames on level change + 20 s heartbeat.
+ * Implements RFC-6455 WebSocket + correct Sinric Pro message envelope:
+ *   { "payloadVersion":2, "signatureVersion":12,
+ *     "signature":{"HMAC":"<sha256_hex>"},
+ *     "payload":{ ... "action":"sendTemperatureEvent" ... } }
  *
- * TLS root: ISRG Root YR + Let's Encrypt YR1 intermediate
- *   (ws.sinric.pro uses Let's Encrypt, NOT Google Trust Services)
+ * HMAC-SHA256 is computed with APP_SECRET as key, payload JSON as message.
+ * Without this signature the Sinric Pro server discards the events (shows "--").
+ *
+ * TLS: ISRG Root YR + Let's Encrypt YR1  (ws.sinric.pro chain, Aug 2026)
  */
 
 #include "sinric_client.h"
@@ -20,12 +22,17 @@
 #include <stdio.h>
 #include <stdint.h>
 #include <stdlib.h>
+#include <sys/select.h>
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 #include "freertos/event_groups.h"
 #include "esp_log.h"
 #include "esp_tls.h"
 #include "esp_random.h"
+#include "mbedtls/md.h"
+#include "psa/crypto.h"
+#include "mbedtls/base64.h"
+#include "mbedtls/error.h"
 
 static const char *TAG = "SINRIC_PRO";
 
@@ -34,7 +41,7 @@ static const char *TAG = "SINRIC_PRO";
 /* ws.sinric.pro -> Let's Encrypt YR1 -> ISRG Root YR                     */
 /* ----------------------------------------------------------------------- */
 static const char k_sinric_ca_pem[] =
-    /* ISRG Root YR (root, signed by ISRG Root X1) */
+    /* ISRG Root YR */
     "-----BEGIN CERTIFICATE-----\n"
     "MIIF9DCCA9ygAwIBAgIRAPJLbRf52a18scn+p4eCaZ8wDQYJKoZIhvcNAQELBQAw\n"
     "TzELMAkGA1UEBhMCVVMxKTAnBgNVBAoTIEludGVybmV0IFNlY3VyaXR5IFJlc2Vh\n"
@@ -102,95 +109,154 @@ static const char k_sinric_ca_pem[] =
 /* ----------------------------------------------------------------------- */
 /* Level table                                                              */
 /* ----------------------------------------------------------------------- */
-typedef struct {
-    water_level_t level;
-    const char   *label;
-    int           percent;
-} sinric_level_info_t;
-
-static const sinric_level_info_t k_level_info[] = {
-    { WATER_LEVEL_EMPTY,   "Tank Empty",                    0  },
-    { WATER_LEVEL_LOW,     "Water Level Low",              22  },
-    { WATER_LEVEL_MEDIUM,  "Water Level Sixty One Percent",61  },
-    { WATER_LEVEL_FULL,    "Tank Full",                   100  },
-    { WATER_LEVEL_INVALID, "Sensor Fault",                  0  },
+typedef struct { water_level_t level; int percent; } sinric_level_t;
+static const sinric_level_t k_lvl[] = {
+    { WATER_LEVEL_EMPTY,   0   },
+    { WATER_LEVEL_LOW,    22   },
+    { WATER_LEVEL_MEDIUM, 61   },
+    { WATER_LEVEL_FULL,  100   },
+    { WATER_LEVEL_INVALID, 0   },
 };
 
 /* ----------------------------------------------------------------------- */
-/* Minimal WebSocket framing — RFC 6455, client frames must be masked       */
+/* HMAC-SHA256 using mbedtls — returns BASE64 encoded string               */
+/* The official Sinric Pro SDK uses HMACbase64(), NOT hex encoding.         */
+/* 32 HMAC bytes -> 44-char base64 string + '\0'                           */
 /* ----------------------------------------------------------------------- */
-#define WS_OPCODE_TEXT  0x01
-#define WS_FIN          0x80
-
-static int ws_frame_text(uint8_t *out, size_t out_size,
-                          const char *payload, size_t payload_len)
+static void hmac_sha256_base64(const char *key, const char *msg, char *out_b64)
 {
-    if (payload_len > 65535) return -1;
+    psa_crypto_init();
 
-    size_t  header_len;
+    uint8_t mac_out[32] = {0};
+    
+    psa_key_attributes_t attributes = PSA_KEY_ATTRIBUTES_INIT;
+    psa_set_key_usage_flags(&attributes, PSA_KEY_USAGE_SIGN_MESSAGE);
+    psa_set_key_algorithm(&attributes, PSA_ALG_HMAC(PSA_ALG_SHA_256));
+    psa_set_key_type(&attributes, PSA_KEY_TYPE_HMAC);
+
+    psa_key_id_t key_id;
+    psa_status_t status = psa_import_key(&attributes, (const uint8_t*)key, strlen(key), &key_id);
+    
+    if (status == PSA_SUCCESS) {
+        size_t mac_length = 0;
+        status = psa_mac_compute(key_id, PSA_ALG_HMAC(PSA_ALG_SHA_256), 
+                                 (const uint8_t*)msg, strlen(msg), 
+                                 mac_out, sizeof(mac_out), &mac_length);
+        if (status != PSA_SUCCESS) {
+            ESP_LOGE(TAG, "psa_mac_compute failed: %d", status);
+        }
+        psa_destroy_key(key_id);
+    } else {
+        ESP_LOGE(TAG, "psa_import_key failed: %d", status);
+    }
+
+    char hex_str[65];
+    for(int i=0; i<32; i++) sprintf(hex_str + i*2, "%02x", mac_out[i]);
+    ESP_LOGI(TAG, "RAW MAC HEX: %s", hex_str);
+
+    size_t olen = 0;
+    mbedtls_base64_encode((uint8_t *)out_b64, 48, &olen, mac_out, 32);
+    out_b64[olen] = '\0';
+}
+
+/* ----------------------------------------------------------------------- */
+/* Build the full signed Sinric Pro envelope                               */
+/*                                                                         */
+/* Wire format (matching official SDK):                                    */
+/*   {                                                                     */
+/*     "payloadVersion":2,                                                 */
+/*     "signatureVersion":12,                                              */
+/*     "signature":{"HMAC":"<64-char hex>"},                               */
+/*     "payload":{                                                         */
+/*       "action":"sendTemperatureEvent",                                  */
+/*       "clientId":"<APP_KEY>",                                           */
+/*       "createdAt":<unix_ts>,                                            */
+/*       "deviceAttributes":[],                                            */
+/*       "deviceId":"<DEVICE_ID>",                                         */
+/*       "reachability":true,                                              */
+/*       "type":"event",                                                   */
+/*       "value":{"humidity":<n>,"temperature":<n>}                        */
+/*     }                                                                   */
+/*   }                                                                     */
+/* ----------------------------------------------------------------------- */
+static void build_signed_message(char *out, size_t out_size, int percent)
+{
+    /* 1. Build the payload JSON string first */
+    /* Must exactly match the insertion order of ArduinoJson used in the official SDK */
+    char reply_token[37];
+    snprintf(reply_token, sizeof(reply_token), "%04x%04x-%04x-%04x-%04x-%04x%04x%04x",
+             (unsigned int)(esp_random() & 0xFFFF), (unsigned int)(esp_random() & 0xFFFF), (unsigned int)(esp_random() & 0xFFFF),
+             (unsigned int)((esp_random() & 0x0FFF) | 0x4000),
+             (unsigned int)((esp_random() & 0x3FFF) | 0x8000),
+             (unsigned int)(esp_random() & 0xFFFF), (unsigned int)(esp_random() & 0xFFFF), (unsigned int)(esp_random() & 0xFFFF));
+
+    time_t now = time(NULL);
+    uint64_t created_at = (uint64_t)now;
+    if (created_at < 1700000000ULL) {
+        created_at = 1785838000ULL; /* Fallback to current August 2026 epoch timestamp */
+    }
+
+    char payload[384];
+    snprintf(payload, sizeof(payload),
+             "{\"action\":\"currentTemperature\",\"cause\":{\"type\":\"PERIODIC_POLL\"},\"createdAt\":%llu,\"deviceId\":\"%s\",\"replyToken\":\"%s\",\"type\":\"event\",\"value\":{\"humidity\":%d,\"temperature\":%d}}",
+             (unsigned long long)created_at,
+             SINRIC_PRO_DEVICE_ID,
+             reply_token,
+             (int)percent,
+             (int)percent);
+
+    /* 2. Sign payload with HMAC-SHA256(APP_SECRET, payload) — base64 encoded.
+     *    The Sinric Pro SDK uses HMACbase64(), so the output must be base64
+     *    (44 chars), not hex (64 chars). Server rejects non-base64 signatures. */
+    char hmac[48];
+    hmac_sha256_base64(SINRIC_PRO_APP_SECRET, payload, hmac);
+
+    /* 3. Wrap in full Sinric Pro envelope */
+    snprintf(out, out_size,
+             "{\"header\":{\"payloadVersion\":2,\"signatureVersion\":1},\"payload\":%s,\"signature\":{\"HMAC\":\"%s\"}}",
+             payload, hmac);
+
+    ESP_LOGI(TAG, "Sinric Payload: %s", payload);
+    ESP_LOGI(TAG, "Sinric HMAC: %s", hmac);
+    ESP_LOGI(TAG, "Sinric Envelope: %s", out);
+}
+
+/* ----------------------------------------------------------------------- */
+/* Minimal WebSocket TX framing — RFC 6455, client frames must be masked    */
+/* ----------------------------------------------------------------------- */
+#define WS_OP_TEXT  0x01
+#define WS_OP_PONG  0x0A
+#define WS_OP_PING  0x09
+#define WS_OP_CLOSE 0x08
+#define WS_FIN      0x80
+
+static int ws_build_frame(uint8_t opcode, const uint8_t *payload,
+                           size_t plen, uint8_t *out, size_t out_size)
+{
+    size_t header_len;
     uint8_t mask[4];
     uint32_t m = esp_random();
     memcpy(mask, &m, 4);
 
-    out[0] = WS_FIN | WS_OPCODE_TEXT;
-    if (payload_len < 126) {
-        out[1] = (uint8_t)(0x80 | payload_len);
+    out[0] = WS_FIN | (opcode & 0x0F);
+    if (plen < 126) {
+        out[1] = (uint8_t)(0x80 | plen);
         memcpy(out + 2, mask, 4);
         header_len = 6;
-    } else {
+    } else if (plen <= 65535) {
         out[1] = 0x80 | 126;
-        out[2] = (payload_len >> 8) & 0xFF;
-        out[3] =  payload_len       & 0xFF;
+        out[2] = (plen >> 8) & 0xFF;
+        out[3] =  plen       & 0xFF;
         memcpy(out + 4, mask, 4);
         header_len = 8;
+    } else {
+        return -1;
     }
-
-    if (header_len + payload_len > out_size) return -1;
-
-    for (size_t i = 0; i < payload_len; i++) {
-        out[header_len + i] = (uint8_t)payload[i] ^ mask[i & 3];
+    if (header_len + plen > out_size) return -1;
+    for (size_t i = 0; i < plen; i++) {
+        out[header_len + i] = payload[i] ^ mask[i & 3];
     }
-    return (int)(header_len + payload_len);
-}
-
-/* ----------------------------------------------------------------------- */
-/* Build Sinric Pro JSON payload                                            */
-/* ----------------------------------------------------------------------- */
-static void build_payload(char *buf, size_t buf_size, int percent)
-{
-    uint32_t r0 = esp_random(), r1 = esp_random(),
-             r2 = esp_random(), r3 = esp_random();
-
-    unsigned long now = (unsigned long)(xTaskGetTickCount() / configTICK_RATE_HZ)
-                        + 1704067200UL;
-
-    char msg_id[40], ts[14];
-    snprintf(msg_id, sizeof(msg_id),
-             "%08lx-%04lx-%04lx-%04lx-%08lx%04lx",
-             (unsigned long)r0,
-             (unsigned long)((r1 >> 16) & 0xFFFFU),
-             (unsigned long)(r1 & 0xFFFFU),
-             (unsigned long)((r2 >> 16) & 0xFFFFU),
-             (unsigned long)(r2 & 0xFFFFU),
-             (unsigned long)(r3 >> 16));
-    snprintf(ts, sizeof(ts), "%lu", now);
-
-    snprintf(buf, buf_size,
-             "{"
-             "\"payloadVersion\":2,"
-             "\"clientId\":\"%s\","
-             "\"messageId\":\"%s\","
-             "\"createdAt\":%s,"
-             "\"deviceId\":\"%s\","
-             "\"type\":\"event\","
-             "\"action\":\"sendTemperatureEvent\","
-             "\"value\":{\"temperature\":%d,\"humidity\":%d}"
-             "}",
-             SINRIC_PRO_APP_KEY,
-             msg_id,
-             ts,
-             SINRIC_PRO_DEVICE_ID,
-             percent, percent);
+    return (int)(header_len + plen);
 }
 
 /* ----------------------------------------------------------------------- */
@@ -202,33 +268,28 @@ static void base64_16(const uint8_t *in, char *out)
         "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
     int i, o = 0;
     for (i = 0; i < 15; i += 3) {
-        uint32_t v = ((uint32_t)in[i] << 16) |
-                     ((uint32_t)in[i+1] << 8) |
-                     (uint32_t)in[i+2];
-        out[o++] = enc[(v >> 18) & 0x3F];
-        out[o++] = enc[(v >> 12) & 0x3F];
-        out[o++] = enc[(v >>  6) & 0x3F];
-        out[o++] = enc[(v >>  0) & 0x3F];
+        uint32_t v = ((uint32_t)in[i]<<16) | ((uint32_t)in[i+1]<<8) | in[i+2];
+        out[o++] = enc[(v>>18)&0x3F]; out[o++] = enc[(v>>12)&0x3F];
+        out[o++] = enc[(v>> 6)&0x3F]; out[o++] = enc[(v>> 0)&0x3F];
     }
     uint32_t v = (uint32_t)in[15] << 16;
-    out[o++] = enc[(v >> 18) & 0x3F];
-    out[o++] = enc[(v >> 12) & 0x3F];
-    out[o++] = '=';
-    out[o++] = '=';
-    out[o]   = '\0';
+    out[o++] = enc[(v>>18)&0x3F]; out[o++] = enc[(v>>12)&0x3F];
+    out[o++] = '='; out[o++] = '='; out[o] = '\0';
 }
 
 /* ----------------------------------------------------------------------- */
-/* Open WSS connection + WebSocket handshake                                */
+/* Connection state                                                         */
 /* ----------------------------------------------------------------------- */
-static esp_tls_t *s_tls = NULL;
+static esp_tls_t *s_tls    = NULL;
+static int        s_sockfd = -1;
 
+/* ----------------------------------------------------------------------- */
+/* WebSocket connect + HTTP upgrade                                         */
+/* ----------------------------------------------------------------------- */
 static bool sinric_ws_connect(void)
 {
-    if (s_tls) {
-        esp_tls_conn_destroy(s_tls);
-        s_tls = NULL;
-    }
+    if (s_tls) { esp_tls_conn_destroy(s_tls); s_tls = NULL; }
+    s_sockfd = -1;
 
     esp_tls_cfg_t tls_cfg = {
         .cacert_buf   = (const unsigned char *)k_sinric_ca_pem,
@@ -236,30 +297,22 @@ static bool sinric_ws_connect(void)
     };
 
     s_tls = esp_tls_init();
-    if (!s_tls) {
-        ESP_LOGE(TAG, "esp_tls_init failed");
-        return false;
-    }
+    if (!s_tls) { ESP_LOGE(TAG, "esp_tls_init failed"); return false; }
 
     int ret = esp_tls_conn_new_sync("ws.sinric.pro", strlen("ws.sinric.pro"),
                                      443, &tls_cfg, s_tls);
     if (ret != 1) {
         ESP_LOGE(TAG, "TLS connect failed: %d", ret);
-        esp_tls_conn_destroy(s_tls);
-        s_tls = NULL;
-        return false;
+        esp_tls_conn_destroy(s_tls); s_tls = NULL; return false;
     }
+    esp_tls_get_conn_sockfd(s_tls, &s_sockfd);
 
-    /* WebSocket HTTP Upgrade with Sinric Pro auth headers */
+    /* Build WebSocket key */
     uint8_t key_raw[16];
-    uint32_t k0 = esp_random(), k1 = esp_random(),
-             k2 = esp_random(), k3 = esp_random();
-    memcpy(key_raw,      &k0, 4);
-    memcpy(key_raw +  4, &k1, 4);
-    memcpy(key_raw +  8, &k2, 4);
-    memcpy(key_raw + 12, &k3, 4);
-    char key_b64[25];
-    base64_16(key_raw, key_b64);
+    uint32_t k0=esp_random(), k1=esp_random(), k2=esp_random(), k3=esp_random();
+    memcpy(key_raw,    &k0,4); memcpy(key_raw+4, &k1,4);
+    memcpy(key_raw+8,  &k2,4); memcpy(key_raw+12,&k3,4);
+    char key_b64[25]; base64_16(key_raw, key_b64);
 
     char http_req[768];
     int  req_len = snprintf(http_req, sizeof(http_req),
@@ -275,47 +328,98 @@ static bool sinric_ws_connect(void)
         "version: 2.10.0\r\n"
         "restoredevicestates: false\r\n"
         "\r\n",
-        key_b64,
-        SINRIC_PRO_APP_KEY,
-        SINRIC_PRO_DEVICE_ID);
+        key_b64, SINRIC_PRO_APP_KEY, SINRIC_PRO_DEVICE_ID);
 
-    ssize_t written = esp_tls_conn_write(s_tls, http_req, req_len);
-    if (written < req_len) {
-        ESP_LOGE(TAG, "WS handshake write failed (%d of %d)", (int)written, req_len);
-        esp_tls_conn_destroy(s_tls);
-        s_tls = NULL;
-        return false;
+    if (esp_tls_conn_write(s_tls, http_req, req_len) < req_len) {
+        ESP_LOGE(TAG, "WS handshake write failed");
+        esp_tls_conn_destroy(s_tls); s_tls = NULL; return false;
     }
 
     char resp[512] = {0};
-    ssize_t read_len = esp_tls_conn_read(s_tls, resp, sizeof(resp) - 1);
-    if (read_len <= 0 || strstr(resp, "101") == NULL) {
-        ESP_LOGE(TAG, "WS upgrade failed (rx=%d): %.80s", (int)read_len, resp);
-        esp_tls_conn_destroy(s_tls);
-        s_tls = NULL;
-        return false;
+    ssize_t rlen = esp_tls_conn_read(s_tls, resp, sizeof(resp)-1);
+    if (rlen <= 0 || strstr(resp, "101") == NULL) {
+        ESP_LOGE(TAG, "WS upgrade failed (rx=%d): %.80s", (int)rlen, resp);
+        esp_tls_conn_destroy(s_tls); s_tls = NULL; return false;
     }
-
     ESP_LOGI(TAG, "WebSocket connected to ws.sinric.pro");
     return true;
 }
 
-static bool sinric_ws_send(const char *payload)
+/* ----------------------------------------------------------------------- */
+/* Send a masked text frame                                                 */
+/* ----------------------------------------------------------------------- */
+static bool sinric_ws_send(const char *text)
 {
     if (!s_tls) return false;
-    size_t  plen = strlen(payload);
-    size_t  frame_size = plen + 10;
+    size_t  plen = strlen(text);
+    size_t  frame_size = plen + 12;
     uint8_t *frame = malloc(frame_size);
     if (!frame) return false;
 
-    int flen = ws_frame_text(frame, frame_size, payload, plen);
-    bool ok = false;
-    if (flen > 0) {
-        ssize_t w = esp_tls_conn_write(s_tls, frame, flen);
-        ok = (w == flen);
-    }
+    int flen = ws_build_frame(WS_OP_TEXT, (const uint8_t *)text, plen,
+                               frame, frame_size);
+    bool ok = (flen > 0) && (esp_tls_conn_write(s_tls, frame, flen) == flen);
     free(frame);
     return ok;
+}
+
+/* ----------------------------------------------------------------------- */
+/* Poll for incoming server frames; reply to pings with pong.              */
+/* ----------------------------------------------------------------------- */
+static bool sinric_ws_poll(void)
+{
+    if (!s_tls || s_sockfd < 0) return false;
+
+    fd_set rfds;
+    struct timeval tv = {0, 0};
+    FD_ZERO(&rfds); FD_SET(s_sockfd, &rfds);
+    if (select(s_sockfd + 1, &rfds, NULL, NULL, &tv) <= 0) return true;
+
+    uint8_t hdr[2];
+    if (esp_tls_conn_read(s_tls, hdr, 2) != 2) return false;
+
+    uint8_t opcode  = hdr[0] & 0x0F;
+    bool    masked  = (hdr[1] & 0x80) != 0;
+    size_t  plen    = hdr[1] & 0x7F;
+
+    if (plen == 126) {
+        uint8_t ext[2];
+        if (esp_tls_conn_read(s_tls, ext, 2) != 2) return false;
+        plen = ((size_t)ext[0] << 8) | ext[1];
+    } else if (plen == 127) {
+        uint8_t ext[8]; esp_tls_conn_read(s_tls, ext, 8);
+        return true;
+    }
+
+    uint8_t mask[4] = {0};
+    if (masked) esp_tls_conn_read(s_tls, mask, 4);
+
+    uint8_t payload[256] = {0};
+    size_t  to_read = plen < sizeof(payload) ? plen : sizeof(payload);
+    if (to_read > 0) {
+        esp_tls_conn_read(s_tls, payload, to_read);
+        if (masked) for (size_t i=0;i<to_read;i++) payload[i]^=mask[i&3];
+    }
+    size_t remaining = plen - to_read;
+    while (remaining > 0) {
+        uint8_t sink[64];
+        size_t chunk = remaining < sizeof(sink) ? remaining : sizeof(sink);
+        ssize_t rd = esp_tls_conn_read(s_tls, sink, chunk);
+        if (rd <= 0) break;
+        remaining -= (size_t)rd;
+    }
+
+    if (opcode == WS_OP_PING) {
+        uint8_t pong_frame[64];
+        int flen = ws_build_frame(WS_OP_PONG, payload, to_read,
+                                  pong_frame, sizeof(pong_frame));
+        if (flen > 0) esp_tls_conn_write(s_tls, pong_frame, flen);
+        ESP_LOGD(TAG, "pong sent");
+    } else if (opcode == WS_OP_CLOSE) {
+        ESP_LOGW(TAG, "WS close — reconnecting");
+        return false;
+    }
+    return true;
 }
 
 /* ----------------------------------------------------------------------- */
@@ -332,7 +436,7 @@ static void sinric_task(void *arg)
     ESP_LOGI(TAG, "Wi-Fi connected — starting Sinric Pro WebSocket...");
     vTaskDelay(pdMS_TO_TICKS(1000));
 
-    char payload[600];
+    char message[900];  /* envelope: ~64-char HMAC + ~512-char payload */
 
     for (;;) {
         if (!sinric_ws_connect()) {
@@ -340,9 +444,10 @@ static void sinric_task(void *arg)
             continue;
         }
 
-        int percent = k_level_info[(int)g_current_level].percent;
-        build_payload(payload, sizeof(payload), percent);
-        if (sinric_ws_send(payload)) {
+        /* Send initial signed state */
+        int percent = k_lvl[(int)g_current_level].percent;
+        build_signed_message(message, sizeof(message), percent);
+        if (sinric_ws_send(message)) {
             ESP_LOGI(TAG, "Sinric Pro: initial state sent (%d%%)", percent);
         }
 
@@ -351,24 +456,31 @@ static void sinric_task(void *arg)
         bool          connected = true;
 
         while (connected) {
-            bool got_event = (xQueueReceive(g_level_change_queue, &evt,
-                                            pdMS_TO_TICKS(5000)) == pdTRUE);
-            TickType_t now = xTaskGetTickCount();
-
-            if (got_event) {
-                int p = k_level_info[(int)evt.level].percent;
-                build_payload(payload, sizeof(payload), p);
-                if (!sinric_ws_send(payload)) {
-                    ESP_LOGW(TAG, "Send failed — reconnecting");
-                    connected = false;
-                } else {
-                    ESP_LOGI(TAG, "Sinric Pro: level event sent (%d%%)", p);
-                    last_hb = now;
+            /* Poll 1-second window in 50ms slices, servicing pings */
+            for (int slice = 0; slice < 20; slice++) {
+                bool got = (xQueueReceive(g_level_change_queue, &evt,
+                                          pdMS_TO_TICKS(50)) == pdTRUE);
+                if (got) {
+                    int p = k_lvl[(int)evt.level].percent;
+                    build_signed_message(message, sizeof(message), p);
+                    if (!sinric_ws_send(message)) {
+                        ESP_LOGW(TAG, "Send failed — reconnecting");
+                        connected = false;
+                    } else {
+                        ESP_LOGI(TAG, "Sinric Pro: level event (%d%%)", p);
+                        last_hb = xTaskGetTickCount();
+                    }
+                    break;
                 }
-            } else if ((now - last_hb) >= pdMS_TO_TICKS(20000)) {
-                int p = k_level_info[(int)g_current_level].percent;
-                build_payload(payload, sizeof(payload), p);
-                if (!sinric_ws_send(payload)) {
+                if (!sinric_ws_poll()) { connected = false; break; }
+            }
+
+            /* 20-second heartbeat */
+            TickType_t now = xTaskGetTickCount();
+            if (connected && (now - last_hb) >= pdMS_TO_TICKS(20000)) {
+                int p = k_lvl[(int)g_current_level].percent;
+                build_signed_message(message, sizeof(message), p);
+                if (!sinric_ws_send(message)) {
                     ESP_LOGW(TAG, "Heartbeat failed — reconnecting");
                     connected = false;
                 } else {
@@ -378,10 +490,8 @@ static void sinric_task(void *arg)
             }
         }
 
-        if (s_tls) {
-            esp_tls_conn_destroy(s_tls);
-            s_tls = NULL;
-        }
+        if (s_tls) { esp_tls_conn_destroy(s_tls); s_tls = NULL; }
+        s_sockfd = -1;
         vTaskDelay(pdMS_TO_TICKS(5000));
     }
 }
