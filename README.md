@@ -9,10 +9,16 @@ It features real-time **Blynk Cloud IoT monitoring**, instant mobile push notifi
 ## 🌟 Key Features
 
 - **📶 Blynk IoT Cloud Integration**: Monitor water percentage, tank status, and probe states anywhere in the world via Blynk Mobile App & Web Console.
-- **🔊 Bilingual Voice Announcements**: Real-time audio alerts in **English** and **Telugu** (*"Tank Empty / ట్యాంక్ ఖాళీగా ఉంది"*, *"Tank Full / ట్యాంక్ నిండిపోయింది"*).
+- **🗣️ Bilingual Voice Announcements & Repetition Rules**: Real-time audio alerts in **English** and **Telugu** (*"Tank Empty"*, *"Tank Full"*). 
+  - **Tank Empty (0%)**: Repeats **5 times** continuously.
+  - **Level Low (22%)**: Repeats **2 times**.
+  - **Level Medium (61%)**: Repeats **3 times**.
+  - **Tank Full (100%)**: Repeats **5 times** continuously.
+- **⚡ Smart Interrupt Capability**: Automatically interrupts ongoing repetitions if a new water level change occurs, immediately starting the newest level announcement.
+- **🌙 Scheduled Night Deep Sleep**: Enters ultra-low-power Deep Sleep (<10µA) during night hours (**11:00 PM – 4:00 AM IST**) with 4:00 AM timer auto-wake and emergency probe GPIO wakeup.
 - **🔊 MAX98357A I2S Audio**: 16000 Hz, 16-bit Mono PCM audio with **+12 dB 4.0x software digital gain boost** and dynamic audio normalization (`dynaudnorm`).
 - **📱 Instant Mobile Push Notifications**: Sends immediate push alerts to iOS/Android smartphones on water level state changes.
-- **💚 24/7 Telemetry & Heartbeat**: Periodic 15-second heartbeat sync ensures the device remains marked **ONLINE (Green Dot)** continuously.
+- **💚 24/7 Telemetry & Heartbeat**: Periodic 15-second heartbeat sync ensures the device remains marked **ONLINE (Green Dot)** continuously during active hours.
 - **🛡️ Fault Detection**: Debounced GPIO sensor polling with automatic sensor fault detection for improper probe contact.
 - **⚡ Custom Flash Partitioning**: Custom 3 MB factory app partition for Wi-Fi + TLS + mbedTLS certificate bundle + embedded PCM voice arrays.
 
@@ -33,14 +39,14 @@ It features real-time **Blynk Cloud IoT monitoring**, instant mobile push notifi
 
 ---
 
-## 🗣️ Bilingual Audio Announcements
+## 🗣️ Bilingual Audio Announcements & Repetitions
 
-| Water Level | English Announcement | Telugu Announcement |
-| :--- | :--- | :--- |
-| **Tank Empty (0%)** | *"Tank Empty. Please turn on the motor."* | *"ట్యాంక్ ఖాళీగా ఉంది. దయచేసి నీటి పంపు ఆన్ చేయండి."* |
-| **Level Low (22%)** | *"Water Level Low."* | *"నీటి మట్టం తక్కువగా ఉంది. ఇరవై రెండు శాతం."* |
-| **Level Medium (61%)** | *"Water Level Sixty One Percent."* | *"నీటి మట్టం అరవై ఒక్క శాతం ఉంది."* |
-| **Tank Full (100%)** | *"Tank Full. Please turn off the motor."* | *"ట్యాంక్ నిండిపోయింది. దయచేసి నీటి పంపు ఆఫ్ చేయండి."* |
+| Water Level | English Announcement | Telugu Announcement | Repetitions |
+| :--- | :--- | :--- | :--- |
+| **Tank Empty (0%)** | *"Tank Empty. Please turn on the motor."* | *"ట్యాంక్ ఖాళీగా ఉంది. దయచేసి నీటి పంపు ఆన్ చేయండి."* | **5 Times** |
+| **Level Low (22%)** | *"Water Level Low."* | *"నీటి మట్టం తక్కువగా ఉంది. ఇరవై రెండు శాతం."* | **2 Times** |
+| **Level Medium (61%)** | *"Water Level Sixty One Percent."* | *"నీటి మట్టం అరవై ఒక్క శాతం ఉంది."* | **3 Times** |
+| **Tank Full (100%)** | *"Tank Full. Please turn off the motor."* | *"ట్యాంక్ నిండిపోయింది. దయచేసి నీటి పంపు ఆఫ్ చేయండి."* | **5 Times** |
 
 ---
 

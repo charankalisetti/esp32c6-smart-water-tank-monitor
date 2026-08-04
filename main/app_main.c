@@ -28,6 +28,7 @@
 #include "wifi_manager.h"
 #include "blynk_client.h"
 #include "sinric_client.h"
+#include "night_sleep.h"
 
 #include "esp_log.h"
 #include "esp_err.h"
@@ -120,14 +121,16 @@ esp_err_t app_main_run(void)
                  esp_err_to_name(ret));
     }
 
-    sinric_client_init();
+    /* Initialize Nighttime Deep Sleep & Timezone */
+    night_sleep_init();
+    night_sleep_start_monitor_task();
 
     /* ------------------------------------------------------------------
      * Step 7: Signal full boot completion
      * ------------------------------------------------------------------ */
     xEventGroupSetBits(g_system_event_group, EVT_BOOT_COMPLETE);
     ESP_LOGI(TAG, "Boot complete — scheduler now owns execution");
-    ESP_LOGI(TAG, "Tasks running: water_sensor | audio_player | blynk | sinric");
+    ESP_LOGI(TAG, "Tasks running: water_sensor | audio_player | blynk | sinric | night_monitor");
 
     return ESP_OK;
 }

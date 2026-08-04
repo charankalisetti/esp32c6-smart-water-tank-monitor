@@ -247,37 +247,54 @@ static void audio_player_task(void *pvParameters)
             continue;
         }
 
-        /* Determine lengths based on level */
+        /* Determine lengths and repetition counts based on level spec */
         size_t len_en = 0, len_te = 0;
+        int repeat_count = 1;
         if (event.level == WATER_LEVEL_EMPTY) {
             len_en = tank_empty_pcm_len;
             len_te = tank_empty_te_pcm_len;
+            repeat_count = 5;
         } else if (event.level == WATER_LEVEL_LOW) {
             len_en = water_low_pcm_len;
             len_te = water_low_te_pcm_len;
+            repeat_count = 2;
         } else if (event.level == WATER_LEVEL_MEDIUM) {
             len_en = water_medium_pcm_len;
             len_te = water_medium_te_pcm_len;
+            repeat_count = 3;
         } else if (event.level == WATER_LEVEL_FULL) {
             len_en = tank_full_pcm_len;
             len_te = tank_full_te_pcm_len;
+            repeat_count = 5;
         }
 
-        ESP_LOGI(TAG, "Bilingual announcement triggered for level %d", (int)event.level);
+        ESP_LOGI(TAG, "Bilingual announcement triggered for level %d (repeating %d times)", (int)event.level, repeat_count);
 
         /* Mark audio as in-progress */
         xEventGroupSetBits(g_system_event_group, EVT_AUDIO_PLAYING);
 
-        /* 1. Play English announcement */
-        play_pcm_raw(clip->pcm_en, len_en, clip->label_en);
+        for (int r = 0; r < repeat_count; r++) {
+            /* If a new level event arrives while repeating, interrupt to play the newest state immediately */
+            if (r > 0 && uxQueueMessagesWaiting(g_level_change_queue) > 0) {
+                ESP_LOGI(TAG, "New water level event queued — interrupting repeat loop (completed %d/%d)", r, repeat_count);
+                break;
+            }
 
-        /* Short 300 ms inter-phrase pause */
-        vTaskDelay(pdMS_TO_TICKS(300));
+            /* 1. Play English announcement */
+            play_pcm_raw(clip->pcm_en, len_en, clip->label_en);
 
-        /* 2. Play Telugu announcement */
-        play_pcm_raw(clip->pcm_te, len_te, clip->label_te);
+            /* Short 300 ms inter-phrase pause */
+            vTaskDelay(pdMS_TO_TICKS(300));
 
-        /* Mark audio as idle */
+            /* 2. Play Telugu announcement */
+            play_pcm_raw(clip->pcm_te, len_te, clip->label_te);
+
+            if (r < repeat_count - 1) {
+                /* 500 ms pause between repeated announcements */
+                vTaskDelay(pdMS_TO_TICKS(500));
+            }
+        }
+
         /* Mark audio as idle */
         xEventGroupClearBits(g_system_event_group, EVT_AUDIO_PLAYING);
     }

@@ -22,6 +22,7 @@ idf_component_register(
         "wifi_manager.c"
         "blynk_client.c"
         "sinric_client.c"
+        "night_sleep.c"
 
     INCLUDE_DIRS
         "."
