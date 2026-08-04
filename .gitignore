@@ -17,3 +17,6 @@ __pycache__/
 # OS specific files
 .DS_Store
 Thumbs.db
+
+# Ignored test scratch folders
+sinric_sdk_repo/

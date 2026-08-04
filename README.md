@@ -1,26 +1,26 @@
 # 🌊 ESP32-C6 Smart Water Tank Level Monitor
 
-An industrial-grade, IoT-enabled **Smart Water Tank Level Monitoring System** built on **ESP32-C6** (ESP-IDF 6.x / PlatformIO). 
+An industrial-grade, multi-cloud **Smart Water Tank Level Monitoring System** built on **ESP32-C6** using ESP-IDF 6.x and PlatformIO.
 
-It features real-time **Blynk Cloud IoT monitoring**, instant mobile push notifications, 24/7 online heartbeat telemetry, and **bilingual voice announcements in English & Telugu** played through a MAX98357A I2S Class-D amplifier.
+It features **Dual Wi-Fi Router Auto-Failover**, **BLE Mobile Provisioning**, real-time **Blynk Cloud IoT monitoring**, **Google Home & Google Assistant integration** via Sinric Pro, **Scheduled Night Deep Sleep**, and **bilingual voice announcements in English & Telugu** played through a MAX98357A I2S Class-D amplifier.
 
 ---
 
 ## 🌟 Key Features
 
-- **📶 Blynk IoT Cloud Integration**: Monitor water percentage, tank status, and probe states anywhere in the world via Blynk Mobile App & Web Console.
-- **🗣️ Bilingual Voice Announcements & Repetition Rules**: Real-time audio alerts in **English** and **Telugu** (*"Tank Empty"*, *"Tank Full"*). 
-  - **Tank Empty (0%)**: Repeats **5 times** continuously.
+- **🔄 Dual Wi-Fi Router Auto-Failover**: Maintains dual-network router entries. Automatically detects primary router outages and switches seamlessly to the backup router (`railwirefibernet` primary -> `BSNL Fiber` failover).
+- **📲 BLE Wi-Fi Provisioning & Persistent NVS**: Wi-Fi credentials stored in persistent NVS Flash. When unconfigured, broadcasts Bluetooth LE setup (`Water-Monitor-Setup`) for mobile app configuration.
+- **📶 Blynk IoT Cloud Integration**: Monitor water percentage, tank status, and probe states anywhere in the world via Blynk Mobile App & Web Console with instant push alerts.
+- **🏠 Google Home & Google Assistant Support**: Full visual state updates in Google Home App and voice queries via Sinric Pro.
+- **🗣️ Bilingual Voice Announcements**: Real-time audio alerts in **English** and **Telugu** with level-specific repetition rules:
+  - **Tank Empty (0%)**: Repeats **5 times**.
   - **Level Low (22%)**: Repeats **2 times**.
   - **Level Medium (61%)**: Repeats **3 times**.
-  - **Tank Full (100%)**: Repeats **5 times** continuously.
-- **⚡ Smart Interrupt Capability**: Automatically interrupts ongoing repetitions if a new water level change occurs, immediately starting the newest level announcement.
-- **🌙 Scheduled Night Deep Sleep**: Enters ultra-low-power Deep Sleep (<10µA) during night hours (**11:00 PM – 4:00 AM IST**) with 4:00 AM timer auto-wake and emergency probe GPIO wakeup.
-- **🔊 MAX98357A I2S Audio**: 16000 Hz, 16-bit Mono PCM audio with **+12 dB 4.0x software digital gain boost** and dynamic audio normalization (`dynaudnorm`).
-- **📱 Instant Mobile Push Notifications**: Sends immediate push alerts to iOS/Android smartphones on water level state changes.
+  - **Tank Full (100%)**: Repeats **5 times**.
+- **⚡ Smart Interrupt Capability**: Immediately cancels ongoing announcement repetitions if the tank level changes mid-alert and plays the new level's announcement.
+- **🌙 Scheduled Night Deep Sleep**: Enters ultra-low-power Deep Sleep (<10µA) during night hours (**11:00 PM – 4:00 AM IST**) with 4:00 AM auto-timer wake and emergency probe GPIO wakeup.
+- **🔊 MAX98357A I2S Audio**: 16000 Hz, 16-bit Mono PCM audio with software digital gain boost.
 - **💚 24/7 Telemetry & Heartbeat**: Periodic 15-second heartbeat sync ensures the device remains marked **ONLINE (Green Dot)** continuously during active hours.
-- **🛡️ Fault Detection**: Debounced GPIO sensor polling with automatic sensor fault detection for improper probe contact.
-- **⚡ Custom Flash Partitioning**: Custom 3 MB factory app partition for Wi-Fi + TLS + mbedTLS certificate bundle + embedded PCM voice arrays.
 
 ---
 
@@ -44,17 +44,28 @@ It features real-time **Blynk Cloud IoT monitoring**, instant mobile push notifi
 | Water Level | English Announcement | Telugu Announcement | Repetitions |
 | :--- | :--- | :--- | :--- |
 | **Tank Empty (0%)** | *"Tank Empty. Please turn on the motor."* | *"ట్యాంక్ ఖాళీగా ఉంది. దయచేసి నీటి పంపు ఆన్ చేయండి."* | **5 Times** |
-| **Level Low (22%)** | *"Water Level Low."* | *"నీటి మట్టం తక్కువగా ఉంది. ఇరవై రెండు శాతం."* | **2 Times** |
+| **Level Low (22%)** | *"Water Level Low."* | *"నీటి మట్టం తక్కువగా ఉంది."* | **2 Times** |
 | **Level Medium (61%)** | *"Water Level Sixty One Percent."* | *"నీటి మట్టం అరవై ఒక్క శాతం ఉంది."* | **3 Times** |
 | **Tank Full (100%)** | *"Tank Full. Please turn off the motor."* | *"ట్యాంక్ నిండిపోయింది. దయచేసి నీటి పంపు ఆఫ్ చేయండి."* | **5 Times** |
+
+---
+
+## 🔄 Dual Router Auto-Failover Logic
+
+| Priority | Network SSID | Password | Function |
+| :--- | :--- | :--- | :--- |
+| **Router #1 (Primary)** | `railwirefibernet` | `Charan@1904` | Default connection |
+| **Router #2 (Backup)** | `BSNL Fiber` | `OppoA59@239856` | Automatic failover when Primary is down |
+
+If the primary router loses power or network access for 3 consecutive retries (~6s), the ESP32-C6 automatically reconfigures its station interface and connects to the secondary backup router.
 
 ---
 
 ## 🚀 Building & Flashing
 
 ### Prerequisites
-- [PlatformIO Core](https://platformio.org/) or PlatformIO extension in VS Code / Anti-Gravity IDE.
-- ESP32-C6 DevKitC-1 connected via UART bridge USB port.
+- [PlatformIO Core](https://platformio.org/) or VS Code PlatformIO extension.
+- ESP32-C6 DevKitC-1 connected via USB port.
 
 ### Build and Upload
 ```bash
@@ -76,16 +87,11 @@ pio device monitor --port COM6 --baud 115200
 
 ## 🏠 Google Home & Google Assistant Integration
 
-The device supports **Google Home App** visual tiles and **Google Assistant** voice commands via [Sinric Pro](https://sinric.pro):
+The device supports **Google Home App** visual tiles and **Google Assistant** voice queries via [Sinric Pro](https://sinric.pro):
 
 ### Voice Commands Supported:
 - 🗣️ *"Hey Google, what is the Water Tank Monitor status?"* -> **Google Assistant**: *"Water Tank Monitor level is 61%."*
 - 🗣️ *"OK Google, is the water tank full?"* -> **Google Assistant**: *"Water Tank Monitor status is Full."*
-
-### Setup Instructions:
-1. Register a free account at **[sinric.pro](https://sinric.pro)** and create a device named `"Water Tank Monitor"`.
-2. Open **Google Home App** -> Tap `+` -> **Works with Google** -> Search **Sinric Pro** -> Authorize.
-3. Update `SINRIC_PRO_APP_KEY`, `APP_SECRET`, and `DEVICE_ID` in `main/wifi_config.h`.
 
 ---
 
