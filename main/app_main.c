@@ -121,6 +121,12 @@ esp_err_t app_main_run(void)
                  esp_err_to_name(ret));
     }
 
+    ret = sinric_client_init();
+    if (ret != ESP_OK) {
+        ESP_LOGW(TAG, "sinric_client_init() failed: %s — no Sinric Pro updates",
+                 esp_err_to_name(ret));
+    }
+
     /* Initialize Nighttime Deep Sleep & Timezone */
     night_sleep_init();
     night_sleep_start_monitor_task();
