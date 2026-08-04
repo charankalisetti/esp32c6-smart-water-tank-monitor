@@ -20,6 +20,7 @@ idf_component_register(
         "audio/water_medium_te.c"
         "audio/tank_full_te.c"
         "wifi_manager.c"
+        "wifi_prov.c"
         "blynk_client.c"
         "sinric_client.c"
         "night_sleep.c"
@@ -34,11 +35,13 @@ idf_component_register(
         freertos
         log
         esp_common
-        # Wi-Fi + networking
+        # Wi-Fi + networking + BLE Provisioning
         esp_wifi
         esp_netif
         esp_event
         nvs_flash
+        protocomm
+        bt
         # HTTPS client + TLS (esp_tls is a transitive dep of esp_http_client)
         esp_http_client
         mbedtls

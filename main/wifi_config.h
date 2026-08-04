@@ -12,13 +12,17 @@
 #define WIFI_CONFIG_H
 
 /* ---------------------------------------------------------------------------
- * Wi-Fi Station credentials
+ * Dual Wi-Fi Station credentials (Auto-Failover)
  * --------------------------------------------------------------------------- */
-#define WIFI_SSID           "railwirefibernet"
-#define WIFI_PASSWORD       "Charan@1904"
+#define WIFI_PRIMARY_SSID       "railwirefibernet"
+#define WIFI_PRIMARY_PASSWORD   "Charan@1904"
 
-/** Maximum number of reconnection attempts before giving up (0 = unlimited). */
-#define WIFI_MAX_RETRIES    0u
+#define WIFI_SECONDARY_SSID     "BSNL Fiber"
+#define WIFI_SECONDARY_PASSWORD "OppoA59@239856"
+
+/* Backward compatibility aliases */
+#define WIFI_SSID               WIFI_PRIMARY_SSID
+#define WIFI_PASSWORD           WIFI_PRIMARY_PASSWORD
 
 /* ---------------------------------------------------------------------------
  * Blynk IoT cloud settings

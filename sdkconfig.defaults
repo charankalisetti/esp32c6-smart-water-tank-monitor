@@ -49,3 +49,15 @@ CONFIG_MBEDTLS_SSL_OUT_CONTENT_LEN=4096
 
 # HTTP client buffer
 CONFIG_ESP_HTTP_CLIENT_ENABLE_HTTPS=y
+
+# ---------------------------------------------------------------------------
+# Bluetooth / BLE Provisioning Stack (NimBLE lightweight BLE for ESP32-C6)
+# ---------------------------------------------------------------------------
+CONFIG_BT_ENABLED=y
+CONFIG_BT_BLE_ENABLED=y
+CONFIG_BT_NIMBLE_ENABLED=y
+CONFIG_BT_NIMBLE_ROLE_PERIPHERAL=y
+CONFIG_BT_NIMBLE_ROLE_CENTRAL=n
+CONFIG_BT_NIMBLE_ROLE_OBSERVER=n
+CONFIG_BT_NIMBLE_ROLE_BROADCASTER=y
+

@@ -14,6 +14,7 @@
 #include "wifi_manager.h"
 #include "app_events.h"
 #include "wifi_config.h"
+#include "wifi_prov.h"
 
 #include "esp_event.h"
 #include "esp_log.h"
@@ -32,6 +33,40 @@ static const char *TAG = "WIFI_MANAGER";
 /* Cached IP string for wifi_manager_get_ip() */
 static char s_ip_str[16] = "0.0.0.0";
 
+/* Dual Router Configuration Table */
+typedef struct {
+    const char *ssid;
+    const char *password;
+} wifi_net_entry_t;
+
+static const wifi_net_entry_t DUAL_NETWORKS[] = {
+    { WIFI_PRIMARY_SSID,   WIFI_PRIMARY_PASSWORD },
+    { WIFI_SECONDARY_SSID, WIFI_SECONDARY_PASSWORD },
+};
+
+static size_t s_net_index = 0;
+static int s_disconnect_count = 0;
+
+static void switch_to_next_network(void)
+{
+    s_net_index = (s_net_index + 1) % 2;
+    s_disconnect_count = 0;
+
+    const wifi_net_entry_t *target = &DUAL_NETWORKS[s_net_index];
+    ESP_LOGI(TAG, "=========================================================");
+    ESP_LOGI(TAG, " 🔄 AUTO-FAILOVER: Switching to Network #%d: \"%s\"", (int)s_net_index + 1, target->ssid);
+    ESP_LOGI(TAG, "=========================================================");
+
+    wifi_config_t wifi_cfg = {0};
+    strncpy((char *)wifi_cfg.sta.ssid, target->ssid, sizeof(wifi_cfg.sta.ssid) - 1);
+    strncpy((char *)wifi_cfg.sta.password, target->password, sizeof(wifi_cfg.sta.password) - 1);
+    wifi_cfg.sta.threshold.authmode = WIFI_AUTH_WPA2_PSK;
+
+    esp_wifi_disconnect();
+    esp_wifi_set_config(WIFI_IF_STA, &wifi_cfg);
+    esp_wifi_connect();
+}
+
 /* =========================================================================
  * Internal event handler
  * ========================================================================= */
@@ -41,19 +76,27 @@ static void wifi_event_handler(void *arg, esp_event_base_t event_base,
   if (event_base == WIFI_EVENT) {
     switch (event_id) {
     case WIFI_EVENT_STA_START:
-      ESP_LOGI(TAG, "Wi-Fi STA started — connecting to \"%s\"...", WIFI_SSID);
+      ESP_LOGI(TAG, "Wi-Fi STA started — connecting to Router #%d: \"%s\"...",
+               (int)s_net_index + 1, DUAL_NETWORKS[s_net_index].ssid);
       esp_wifi_connect();
       break;
 
     case WIFI_EVENT_STA_DISCONNECTED: {
       wifi_event_sta_disconnected_t *disc =
           (wifi_event_sta_disconnected_t *)event_data;
-      ESP_LOGW(TAG, "Disconnected (reason %d) — retrying in 3 s...",
-               disc->reason);
-      /* Clear connected bit so Blynk task knows link is down */
+      s_disconnect_count++;
+      ESP_LOGW(TAG, "Disconnected from \"%s\" (reason %d, attempt %d/3)...",
+               DUAL_NETWORKS[s_net_index].ssid, disc->reason, s_disconnect_count);
+      
+      /* Clear connected bit so Blynk/Sinric know link is down */
       xEventGroupClearBits(g_system_event_group, EVT_WIFI_CONNECTED);
-      vTaskDelay(pdMS_TO_TICKS(3000));
-      esp_wifi_connect();
+
+      if (s_disconnect_count >= 3) {
+          switch_to_next_network();
+      } else {
+          vTaskDelay(pdMS_TO_TICKS(2000));
+          esp_wifi_connect();
+      }
       break;
     }
 
@@ -63,7 +106,12 @@ static void wifi_event_handler(void *arg, esp_event_base_t event_base,
   } else if (event_base == IP_EVENT && event_id == IP_EVENT_STA_GOT_IP) {
     ip_event_got_ip_t *event = (ip_event_got_ip_t *)event_data;
     esp_ip4addr_ntoa(&event->ip_info.ip, s_ip_str, sizeof(s_ip_str));
-    ESP_LOGI(TAG, "Got IP: %s", s_ip_str);
+    s_disconnect_count = 0;
+
+    ESP_LOGI(TAG, "=========================================================");
+    ESP_LOGI(TAG, " 🟢 Wi-Fi Connected to \"%s\"!", DUAL_NETWORKS[s_net_index].ssid);
+    ESP_LOGI(TAG, " Assigned IP Address : %s", s_ip_str);
+    ESP_LOGI(TAG, "=========================================================");
     
     /* Initialize SNTP for valid timestamps */
     if (!esp_sntp_enabled()) {
@@ -111,24 +159,8 @@ esp_err_t wifi_manager_init(void) {
   ESP_ERROR_CHECK(esp_event_handler_instance_register(
       IP_EVENT, IP_EVENT_STA_GOT_IP, &wifi_event_handler, NULL, NULL));
 
-  /* Configure Station credentials */
-  wifi_config_t wifi_cfg = {
-      .sta =
-          {
-              .ssid = WIFI_SSID,
-              .password = WIFI_PASSWORD,
-              /* Use WPA2/WPA3 automatically */
-              .threshold.authmode = WIFI_AUTH_WPA2_PSK,
-          },
-  };
-  /* Copy credentials safely */
-  strncpy((char *)wifi_cfg.sta.ssid, WIFI_SSID, sizeof(wifi_cfg.sta.ssid) - 1);
-  strncpy((char *)wifi_cfg.sta.password, WIFI_PASSWORD,
-          sizeof(wifi_cfg.sta.password) - 1);
-
-  ESP_ERROR_CHECK(esp_wifi_set_mode(WIFI_MODE_STA));
-  ESP_ERROR_CHECK(esp_wifi_set_config(WIFI_IF_STA, &wifi_cfg));
-  ESP_ERROR_CHECK(esp_wifi_start()); /* Triggers WIFI_EVENT_STA_START */
+  /* Delegate Wi-Fi credentials setup and BLE provisioning to wifi_prov */
+  ESP_ERROR_CHECK(wifi_prov_init(false));
 
   ESP_LOGI(TAG, "Wi-Fi manager initialised — waiting for connection...");
   return ESP_OK;
