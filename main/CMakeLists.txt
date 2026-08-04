@@ -21,6 +21,7 @@ idf_component_register(
         "audio/tank_full_te.c"
         "wifi_manager.c"
         "blynk_client.c"
+        "sinric_client.c"
 
     INCLUDE_DIRS
         "."

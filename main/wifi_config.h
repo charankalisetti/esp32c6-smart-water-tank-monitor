@@ -49,10 +49,9 @@
 
 /* ---------------------------------------------------------------------------
  * Sinric Pro (Google Home / Google Assistant) Credentials
- * Obtain free credentials at: https://sinric.pro
  * --------------------------------------------------------------------------- */
-#define SINRIC_PRO_APP_KEY    "YOUR_SINRIC_PRO_APP_KEY"
-#define SINRIC_PRO_APP_SECRET "YOUR_SINRIC_PRO_APP_SECRET"
-#define SINRIC_PRO_DEVICE_ID  "YOUR_SINRIC_PRO_DEVICE_ID"
+#define SINRIC_PRO_APP_KEY    "708e98d0-88a5-40ab-a3a9-2b8dd1a79c18"
+#define SINRIC_PRO_APP_SECRET "5a062f26-b572-4369-b9b7-5a53b5decc5f-3558e9ed-e16f-47c3-babc-aff39d2db945"
+#define SINRIC_PRO_DEVICE_ID  "6a7186e509efd1746c350d10"
 
 #endif /* WIFI_CONFIG_H */

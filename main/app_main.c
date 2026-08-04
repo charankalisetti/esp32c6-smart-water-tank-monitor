@@ -27,6 +27,7 @@
 #include "audio_player.h"
 #include "wifi_manager.h"
 #include "blynk_client.h"
+#include "sinric_client.h"
 
 #include "esp_log.h"
 #include "esp_err.h"
@@ -109,8 +110,8 @@ esp_err_t app_main_run(void)
     }
 
     /* ------------------------------------------------------------------
-     * Step 6: Start Blynk cloud push task
-     * Task blocks internally on EVT_WIFI_CONNECTED — safe to start now.
+     * Step 6: Start Blynk cloud push task and Sinric Pro Google Home task
+     * Tasks block internally on EVT_WIFI_CONNECTED — safe to start now.
      * ------------------------------------------------------------------ */
     ret = blynk_task_start();
     if (ret != ESP_OK) {
@@ -119,12 +120,14 @@ esp_err_t app_main_run(void)
                  esp_err_to_name(ret));
     }
 
+    sinric_client_init();
+
     /* ------------------------------------------------------------------
      * Step 7: Signal full boot completion
      * ------------------------------------------------------------------ */
     xEventGroupSetBits(g_system_event_group, EVT_BOOT_COMPLETE);
     ESP_LOGI(TAG, "Boot complete — scheduler now owns execution");
-    ESP_LOGI(TAG, "Tasks running: water_sensor | audio_player | blynk");
+    ESP_LOGI(TAG, "Tasks running: water_sensor | audio_player | blynk | sinric");
 
     return ESP_OK;
 }
