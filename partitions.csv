@@ -1,0 +1,12 @@
+# Custom partition table for Water Tank Monitor
+# ESP32-C6 DevKitC-1 v1.2 — 8 MB flash
+#
+# Single-app (no OTA) layout:
+#   nvs      — Wi-Fi calibration, NVS data
+#   phy_init — RF PHY calibration
+#   factory  — Main application (3 MB — fits WiFi + TLS + PCM audio)
+#
+# Name,     Type,  SubType,  Offset,   Size
+nvs,        data,  nvs,      0x9000,   0x6000,
+phy_init,   data,  phy,      0xf000,   0x1000,
+factory,    app,   factory,  0x10000,  0x300000,

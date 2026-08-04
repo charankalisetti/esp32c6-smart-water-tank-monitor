@@ -1,0 +1,19 @@
+# PlatformIO build artifacts
+.pio/
+.vscode/
+.idea/
+
+# ESP-IDF build artifacts & generated sdkconfig
+build/
+sdkconfig.esp32-c6-devkitc-1
+sdkconfig.old
+
+# Temporary media & python cache
+*.pyc
+__pycache__/
+*.mp3
+*.raw
+
+# OS specific files
+.DS_Store
+Thumbs.db

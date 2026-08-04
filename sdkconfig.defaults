@@ -1,0 +1,51 @@
+# ESP32-C6 SDK Default Configurations
+# IoT Water Tank Level Monitor
+
+CONFIG_IDF_TARGET="esp32c6"
+
+# FreeRTOS tick rate — 1 ms resolution for pdMS_TO_TICKS() accuracy
+CONFIG_FREERTOS_HZ=1000
+
+# Main task stack — increased to handle wifi_manager_init() overhead
+CONFIG_ESP_MAIN_TASK_STACK_SIZE=8192
+
+# Console: Force UART0 (CP210x bridge on UART port)
+# PlatformIO board config defaults ESP32-C6 to USB_SERIAL_JTAG — override it.
+# CONFIG_ESP_CONSOLE_USB_SERIAL_JTAG is not set
+CONFIG_ESP_CONSOLE_UART_DEFAULT=y
+CONFIG_ESP_CONSOLE_UART=y
+CONFIG_ESP_CONSOLE_UART_NUM=0
+CONFIG_ESP_CONSOLE_UART_BAUDRATE=115200
+
+# Increase log buffer to avoid truncation during verbose boot messages
+CONFIG_LOG_MAXIMUM_LEVEL_DEBUG=y
+
+# Flash size — ESP32-C6 DevKitC-1 v1.2 ships with 8 MB flash
+CONFIG_ESPTOOLPY_FLASHSIZE_8MB=y
+CONFIG_ESPTOOLPY_FLASHSIZE="8MB"
+
+# ---------------------------------------------------------------------------
+# Wi-Fi stack
+# ---------------------------------------------------------------------------
+CONFIG_ESP_WIFI_ENABLED=y
+CONFIG_ESP_WIFI_STATIC_RX_BUFFER_NUM=4
+CONFIG_ESP_WIFI_DYNAMIC_RX_BUFFER_NUM=8
+CONFIG_ESP_WIFI_STATIC_TX_BUFFER=y
+CONFIG_ESP_WIFI_TX_BUFFER_TYPE=0
+
+# NVS — required by Wi-Fi driver for calibration data storage
+CONFIG_NVS_ENCRYPTION=n
+
+# ---------------------------------------------------------------------------
+# TLS / HTTPS — required for Blynk cloud API calls
+# ---------------------------------------------------------------------------
+# Use the common CA bundle (includes DigiCert/Blynk's CA, saves ~80 KB vs full)
+CONFIG_MBEDTLS_CERTIFICATE_BUNDLE=y
+CONFIG_MBEDTLS_CERTIFICATE_BUNDLE_DEFAULT_CMN=y
+
+# Allow enough heap for TLS handshake (~50 KB peak)
+CONFIG_MBEDTLS_SSL_IN_CONTENT_LEN=16384
+CONFIG_MBEDTLS_SSL_OUT_CONTENT_LEN=4096
+
+# HTTP client buffer
+CONFIG_ESP_HTTP_CLIENT_ENABLE_HTTPS=y
