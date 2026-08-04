@@ -68,5 +68,20 @@ pio device monitor --port COM6 --baud 115200
 
 ---
 
+## 🏠 Google Home & Google Assistant Integration
+
+The device supports **Google Home App** visual tiles and **Google Assistant** voice commands via [Sinric Pro](https://sinric.pro):
+
+### Voice Commands Supported:
+- 🗣️ *"Hey Google, what is the Water Tank Monitor status?"* -> **Google Assistant**: *"Water Tank Monitor level is 61%."*
+- 🗣️ *"OK Google, is the water tank full?"* -> **Google Assistant**: *"Water Tank Monitor status is Full."*
+
+### Setup Instructions:
+1. Register a free account at **[sinric.pro](https://sinric.pro)** and create a device named `"Water Tank Monitor"`.
+2. Open **Google Home App** -> Tap `+` -> **Works with Google** -> Search **Sinric Pro** -> Authorize.
+3. Update `SINRIC_PRO_APP_KEY`, `APP_SECRET`, and `DEVICE_ID` in `main/wifi_config.h`.
+
+---
+
 ## 📄 License
 Distributed under the MIT License. See `LICENSE` for more information.

@@ -47,4 +47,12 @@
 /** Blynk event name used for push notifications (create in Blynk dashboard). */
 #define BLYNK_EVENT_LEVEL   "level_change"
 
+/* ---------------------------------------------------------------------------
+ * Sinric Pro (Google Home / Google Assistant) Credentials
+ * Obtain free credentials at: https://sinric.pro
+ * --------------------------------------------------------------------------- */
+#define SINRIC_PRO_APP_KEY    "YOUR_SINRIC_PRO_APP_KEY"
+#define SINRIC_PRO_APP_SECRET "YOUR_SINRIC_PRO_APP_SECRET"
+#define SINRIC_PRO_DEVICE_ID  "YOUR_SINRIC_PRO_DEVICE_ID"
+
 #endif /* WIFI_CONFIG_H */
