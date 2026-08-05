@@ -21,11 +21,9 @@
 
 static const char *TAG = "NIGHT_SLEEP";
 
-void night_sleep_init(void) {
-  /* Set timezone to India Standard Time (UTC + 5:30) */
-  setenv("TZ", "IST-5:30", 1);
-  tzset();
+#define IST_OFFSET_SECONDS  (5 * 3600 + 30 * 60)  /* IST is UTC + 5:30 (19800 seconds) */
 
+void night_sleep_init(void) {
   esp_sleep_wakeup_cause_t cause = esp_sleep_get_wakeup_cause();
   switch (cause) {
   case ESP_SLEEP_WAKEUP_TIMER:
@@ -47,14 +45,16 @@ void night_sleep_check_and_enter(void) {
     return;
   }
 
+  /* Explicitly convert UTC timestamp to India Standard Time (UTC + 5:30) */
+  time_t ist_time = now + IST_OFFSET_SECONDS;
   struct tm timeinfo;
-  localtime_r(&now, &timeinfo);
+  gmtime_r(&ist_time, &timeinfo);
 
   int hour = timeinfo.tm_hour;
-  int min = timeinfo.tm_min;
-  int sec = timeinfo.tm_sec;
+  int min  = timeinfo.tm_min;
+  int sec  = timeinfo.tm_sec;
 
-  /* Night rest window: 11:00 PM (23:00) to 04:00 AM */
+  /* Night rest window: 11:00 PM (23:00) to 04:00 AM IST */
   if (hour >= 23 || hour < 4) {
     int seconds_until_4am = 0;
     if (hour >= 23) {
@@ -68,7 +68,7 @@ void night_sleep_check_and_enter(void) {
     }
 
     ESP_LOGI(TAG, "=========================================================");
-    ESP_LOGI(TAG, " Night Rest Hours (11 PM - 4 AM IST) Active! ");
+    ESP_LOGI(TAG, " Night Rest Hours (11 PM - 4 AM IST) Active!");
     ESP_LOGI(TAG, " Current Time: %02d:%02d:%02d IST", hour, min, sec);
     ESP_LOGI(TAG, " Entering Deep Sleep for %d seconds (until 04:00 AM IST)", seconds_until_4am);
     ESP_LOGI(TAG, "=========================================================");
