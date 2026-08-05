@@ -1,0 +1,22 @@
+idf_component_register(
+    SRCS
+        "gpio_config.c"
+        "water_sensor.c"
+        "audio_player.c"
+        "audio/audio_clips.c"
+        "audio/tank_empty_te.c"
+        "audio/water_low_te.c"
+        "audio/water_medium_te.c"
+        "audio/tank_full_te.c"
+    INCLUDE_DIRS
+        "."
+        "audio"
+    REQUIRES
+        driver
+        esp_driver_gpio
+        esp_driver_i2s
+        freertos
+        log
+        esp_common
+        services
+)

@@ -23,6 +23,7 @@
 
 #include "esp_err.h"
 #include "driver/gpio.h"
+#include "sdkconfig.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -33,26 +34,50 @@ extern "C" {
  * ========================================================================= */
 
 /** GPIO connected to the Low water level probe (20 cm from tank base). */
+#ifdef CONFIG_WATER_PROBE_LOW_GPIO
+#define SENSOR_GPIO_LOW     ((gpio_num_t)CONFIG_WATER_PROBE_LOW_GPIO)
+#else
 #define SENSOR_GPIO_LOW     GPIO_NUM_10
+#endif
 
 /** GPIO connected to the Medium water level probe (55 cm from tank base). */
+#ifdef CONFIG_WATER_PROBE_MEDIUM_GPIO
+#define SENSOR_GPIO_MEDIUM  ((gpio_num_t)CONFIG_WATER_PROBE_MEDIUM_GPIO)
+#else
 #define SENSOR_GPIO_MEDIUM  GPIO_NUM_11
+#endif
 
 /** GPIO connected to the Full water level probe (90 cm from tank base). */
+#ifdef CONFIG_WATER_PROBE_FULL_GPIO
+#define SENSOR_GPIO_FULL    ((gpio_num_t)CONFIG_WATER_PROBE_FULL_GPIO)
+#else
 #define SENSOR_GPIO_FULL    GPIO_NUM_23
+#endif
 
 /* =========================================================================
  * I2S GPIO Pin Definitions (MAX98357A)
  * ========================================================================= */
 
 /** I2S Bit Clock — MAX98357A BCLK pin. */
-#define I2S_GPIO_BCLK   GPIO_NUM_19
+#ifdef CONFIG_AUDIO_MAX98357A_BCLK_GPIO
+#define I2S_GPIO_BCLK       ((gpio_num_t)CONFIG_AUDIO_MAX98357A_BCLK_GPIO)
+#else
+#define I2S_GPIO_BCLK       GPIO_NUM_19
+#endif
 
 /** I2S Word Select (LRC) — MAX98357A LRC pin. */
-#define I2S_GPIO_LRC    GPIO_NUM_18
+#ifdef CONFIG_AUDIO_MAX98357A_LRC_GPIO
+#define I2S_GPIO_LRC        ((gpio_num_t)CONFIG_AUDIO_MAX98357A_LRC_GPIO)
+#else
+#define I2S_GPIO_LRC        GPIO_NUM_18
+#endif
 
 /** I2S Data Out — MAX98357A DIN pin. */
-#define I2S_GPIO_DOUT   GPIO_NUM_20
+#ifdef CONFIG_AUDIO_MAX98357A_DIN_GPIO
+#define I2S_GPIO_DOUT       ((gpio_num_t)CONFIG_AUDIO_MAX98357A_DIN_GPIO)
+#else
+#define I2S_GPIO_DOUT       GPIO_NUM_20
+#endif
 
 /* =========================================================================
  * Public API

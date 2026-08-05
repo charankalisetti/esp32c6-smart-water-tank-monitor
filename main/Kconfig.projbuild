@@ -1,0 +1,33 @@
+menu "Water Tank Monitor Configuration"
+
+    config WATER_PROBE_LOW_GPIO
+        int "Low Level Sensor Probe GPIO"
+        default 10
+        help
+            GPIO pin connected to the low level water sensor probe (default: GPIO10).
+
+    config WATER_PROBE_MEDIUM_GPIO
+        int "Medium Level Sensor Probe GPIO"
+        default 11
+        help
+            GPIO pin connected to the medium level water sensor probe (default: GPIO11).
+
+    config WATER_PROBE_FULL_GPIO
+        int "Full Level Sensor Probe GPIO"
+        default 23
+        help
+            GPIO pin connected to the full level water sensor probe (default: GPIO23).
+
+    config AUDIO_MAX98357A_BCLK_GPIO
+        int "MAX98357A I2S BCLK (Bit Clock) GPIO"
+        default 19
+
+    config AUDIO_MAX98357A_LRC_GPIO
+        int "MAX98357A I2S LRC/WS (Word Select) GPIO"
+        default 18
+
+    config AUDIO_MAX98357A_DIN_GPIO
+        int "MAX98357A I2S DIN (Data In) GPIO"
+        default 20
+
+endmenu
