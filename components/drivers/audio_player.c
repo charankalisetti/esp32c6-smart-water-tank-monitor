@@ -134,6 +134,14 @@ static esp_err_t i2s_driver_init(void)
         TAG, "i2s_channel_enable() failed"
     );
 
+    /* Allow MAX98357A internal clock detector 100ms to lock onto BCLK & LRC */
+    vTaskDelay(pdMS_TO_TICKS(100));
+
+    /* Send silent 0-byte preamble to warm up MAX98357A DAC output */
+    int16_t silent_buf[160] = {0};
+    size_t written = 0;
+    i2s_channel_write(s_i2s_tx_handle, silent_buf, sizeof(silent_buf), &written, pdMS_TO_TICKS(100));
+
     ESP_LOGI(TAG, "I2S initialized: %u Hz, 16-bit Mono, "
                   "BCLK=GPIO%d, LRC=GPIO%d, DIN=GPIO%d",
              AUDIO_SAMPLE_RATE_HZ,
