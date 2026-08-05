@@ -25,6 +25,7 @@
 #include "gpio_config.h"
 #include "water_sensor.h"
 #include "audio_player.h"
+#include "buzzer.h"
 #include "wifi_manager.h"
 #include "blynk_client.h"
 #include "sinric_client.h"
@@ -85,6 +86,9 @@ esp_err_t app_main_run(void)
         return ret;
     }
     ESP_LOGI(TAG, "GPIO initialized — sensor probes ready");
+
+    /* Initialize 12V active buzzer NPN transistor switch on GPIO21 */
+    buzzer_init();
 
     /* Signal to the sensor task that GPIOs are ready for polling */
     xEventGroupSetBits(g_system_event_group, EVT_GPIO_READY);

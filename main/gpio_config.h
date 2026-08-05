@@ -55,6 +55,13 @@ extern "C" {
 #define I2S_GPIO_DOUT   GPIO_NUM_20
 
 /* =========================================================================
+ * 12V Active Buzzer Transistor Switch GPIO Pin Definition
+ * ========================================================================= */
+
+/** GPIO connected to PN2222A NPN Transistor Base via 1k resistor. */
+#define BUZZER_GPIO     GPIO_NUM_21
+
+/* =========================================================================
  * Public API
  * ========================================================================= */
 
