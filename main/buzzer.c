@@ -143,8 +143,8 @@ void buzzer_play_pattern(water_level_t level) {
     break;
 
   case WATER_LEVEL_MEDIUM:
-    /* Medium: Voice only, no buzzer */
-    ESP_LOGI(TAG, "Level Medium — Voice only, no buzzer pattern");
+    /* Medium: Continuous buzzer for 3 seconds */
+    buzzer_beep(3000, 0, 1);
     break;
 
   case WATER_LEVEL_FULL:

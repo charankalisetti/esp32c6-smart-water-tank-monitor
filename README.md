@@ -11,7 +11,7 @@ It features **Dual Wi-Fi Router Auto-Failover**, **BLE Mobile Provisioning**, re
 - **🔔 12V Active Buzzer Module (PN2222A Transistor Switch)**: Non-blocking, non-interfering alarm sound patterns via **GPIO21** executed after voice announcements finish:
   - **Tank Empty (0%)**: Continuous **5-second alarm sound**.
   - **Level Low (22%)**: **Two beeps** (300 ms ON, 300 ms OFF).
-  - **Level Medium (61%)**: **Voice Only** (No Buzzer).
+  - **Level Medium (61%)**: Continuous **3-second alarm sound**.
   - **Tank Full (100%)**: **One confirmation beep** (500 ms ON).
 - **🔄 Dual Wi-Fi Router Auto-Failover**: Maintains dual-network router entries. Automatically detects primary router outages and switches seamlessly to the backup router (`railwirefibernet` primary -> `BSNL Fiber` failover).
 - **📲 BLE Wi-Fi Provisioning & Persistent NVS**: Wi-Fi credentials stored in persistent NVS Flash. When unconfigured, broadcasts Bluetooth LE setup (`Water-Monitor-Setup`) for mobile app configuration.
@@ -81,7 +81,7 @@ ESP32-C6 GPIO21 (3.3V) ────[ 1 kΩ Resistor ]──── Base (B)
 | :--- | :--- | :--- |
 | **Tank Empty (0%)** | *"Tank Empty. Please turn on the motor."* (5x) | **Continuous Buzzer for 5 seconds** |
 | **Level Low (22%)** | *"Water Level Low."* (2x) | **Two Beeps** (300 ms ON, 300 ms OFF) |
-| **Level Medium (61%)** | *"Water Level Sixty One Percent."* (3x) | **No Buzzer** (Voice Only) |
+| **Level Medium (61%)** | *"Water Level Sixty One Percent."* (3x) | **Continuous Buzzer for 3 seconds** |
 | **Tank Full (100%)** | *"Tank Full. Please turn off the motor."* (5x) | **One Confirmation Beep** (500 ms ON) |
 
 ---
