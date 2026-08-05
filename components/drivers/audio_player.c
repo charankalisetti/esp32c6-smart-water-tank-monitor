@@ -246,7 +246,7 @@ static void audio_player_task(void *pvParameters)
         level_event_t event;
 
         /* Wait up to 5 seconds for a level change event, feeding TWDT when idle */
-        if (xQueueReceive(g_level_change_queue, &event, pdMS_TO_TICKS(5000)) != pdTRUE) {
+        if (xQueueReceive(g_audio_queue, &event, pdMS_TO_TICKS(5000)) != pdTRUE) {
             continue;
         }
 
@@ -291,7 +291,7 @@ static void audio_player_task(void *pvParameters)
 
         for (int r = 0; r < repeat_count; r++) {
             /* If a new level event arrives while repeating, interrupt to play the newest state immediately */
-            if (r > 0 && uxQueueMessagesWaiting(g_level_change_queue) > 0) {
+            if (r > 0 && uxQueueMessagesWaiting(g_audio_queue) > 0) {
                 ESP_LOGI(TAG, "New water level event queued — interrupting repeat loop (completed %d/%d)", r, repeat_count);
                 break;
             }

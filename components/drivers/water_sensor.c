@@ -265,18 +265,15 @@ static void water_sensor_task(void *pvParameters)
                 /* Print structured serial report */
                 print_level_report(bitmask, confirmed_level);
 
-                /* Build and post the event message */
+                /* Broadcast event to all dedicated subscriber queues */
                 level_event_t event = {
                     .level        = confirmed_level,
                     .gpio_bitmask = bitmask,
                 };
 
-                if (xQueueSend(g_level_change_queue, &event, 0) != pdTRUE) {
-                    /* Queue full — the audio task is busy; log and continue.
-                     * We do not block here to avoid stalling the sensor task. */
-                    ESP_LOGW(TAG, "Level change queue full — event dropped "
-                                  "(audio task may be busy)");
-                }
+                if (g_audio_queue)  xQueueSend(g_audio_queue,  &event, 0);
+                if (g_blynk_queue)  xQueueSend(g_blynk_queue,  &event, 0);
+                if (g_sinric_queue) xQueueSend(g_sinric_queue, &event, 0);
             }
         }
 

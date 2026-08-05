@@ -248,7 +248,7 @@ static void blynk_task(void *arg)
     /* Main loop: block on queue, push on every level change */
     level_event_t evt;
     for (;;) {
-        if (xQueueReceive(g_level_change_queue,
+        if (xQueueReceive(g_blynk_queue,
                           &evt,
                           pdMS_TO_TICKS(15000)) == pdTRUE) {
 
@@ -263,18 +263,11 @@ static void blynk_task(void *arg)
                      (int)evt.level);
             blynk_push_level(evt.level);
         } else {
-            /* Timeout (15 s): Periodic heartbeat — refresh V0 and V1 so Blynk marks hardware ONLINE */
+            /* Timeout (15 s): Periodic heartbeat — push full level snapshot (all 5 pins) */
             EventBits_t bits = xEventGroupGetBits(g_system_event_group);
             if (bits & EVT_WIFI_CONNECTED) {
-                water_level_t cur = g_current_level;
-                if ((size_t)cur >= LEVEL_INFO_COUNT) cur = WATER_LEVEL_INVALID;
-                const blynk_level_info_t *info = &k_level_info[(int)cur];
-                
-                blynk_update_pin(BLYNK_PIN_STATUS, info->label);
-                char int_str[8];
-                snprintf(int_str, sizeof(int_str), "%d", info->percent);
-                blynk_update_pin(BLYNK_PIN_PERCENT, int_str);
-                ESP_LOGD(TAG, "Heartbeat sync sent to Blynk (%s, %d%%)", info->label, info->percent);
+                blynk_push_level(g_current_level);
+                ESP_LOGD(TAG, "Heartbeat sync sent to Blynk (level=%d)", (int)g_current_level);
             }
         }
     }

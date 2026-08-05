@@ -467,7 +467,7 @@ static void sinric_task(void *arg)
         while (connected) {
             /* Poll 1-second window in 50ms slices, servicing pings */
             for (int slice = 0; slice < 20; slice++) {
-                bool got = (xQueueReceive(g_level_change_queue, &evt,
+                bool got = (xQueueReceive(g_sinric_queue, &evt,
                                           pdMS_TO_TICKS(50)) == pdTRUE);
                 if (got) {
                     int p = k_lvl[(int)evt.level].percent;
