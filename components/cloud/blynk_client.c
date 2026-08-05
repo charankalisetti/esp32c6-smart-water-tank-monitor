@@ -7,20 +7,11 @@
  *
  *   https://blynk.cloud/external/api/update?token=TOKEN&V0=value
  *
- * No third-party Blynk library is required. All requests use TLS with the
- * Blynk root CA certificate bundled by ESP-IDF (via esp_tls).
+ * Push notifications (logEvent) are sent ONLY when the water level genuinely
+ * transitions to a new state. Periodic 15-second heartbeats update virtual pins
+ * V0-V4 without sending phone push notifications.
  *
- * Task behaviour:
- *   1. Block on EVT_WIFI_CONNECTED
- *   2. Send initial state to Blynk on first connect
- *   3. Block on g_level_change_queue (blocks until water level changes)
- *   4. On level event: send all 5 virtual pins + logEvent notification
- *   5. Go back to step 3
- *
- * On Wi-Fi loss, HTTPS calls fail gracefully (logged, not fatal).
- * The task re-waits for EVT_WIFI_CONNECTED automatically.
- *
- * @author Senior ESP-IDF Embedded Systems Engineer
+ * @author Principal Embedded Systems Engineer
  */
 
 #include "blynk_client.h"
@@ -39,10 +30,6 @@
 
 static const char *TAG = "BLYNK";
 
-/* =========================================================================
- * Level metadata lookup
- * ========================================================================= */
-
 typedef struct {
     const char *label;     /* Human-readable status string for V0    */
     int         percent;   /* Water percentage for V1                */
@@ -60,20 +47,10 @@ static const blynk_level_info_t k_level_info[] = {
 };
 #define LEVEL_INFO_COUNT  (sizeof(k_level_info) / sizeof(k_level_info[0]))
 
-/* =========================================================================
- * URL encoding helper
- * ========================================================================= */
-
-/**
- * @brief URL-encode a string into a destination buffer.
- *
- * Encodes spaces as %20, % as %25, and all non-alphanumeric/unreserved
- * characters per RFC 3986. Truncates if dst_len is exceeded.
- */
 static void url_encode(char *dst, size_t dst_len, const char *src)
 {
     static const char hex[] = "0123456789ABCDEF";
-    char *end = dst + dst_len - 1;   /* leave room for '\0' */
+    char *end = dst + dst_len - 1;
     while (*src && dst < end) {
         char c = *src++;
         if ((c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z') ||
@@ -85,31 +62,19 @@ static void url_encode(char *dst, size_t dst_len, const char *src)
             *dst++ = hex[(unsigned char)c >> 4];
             *dst++ = hex[(unsigned char)c & 0x0F];
         } else {
-            break;   /* not enough room for %XX */
+            break;
         }
     }
     *dst = '\0';
 }
 
-/* =========================================================================
- * HTTPS helper
- * ========================================================================= */
-
-/**
- * @brief Send a single HTTPS GET to the Blynk HTTP API.
- *
- * URL format: https://blynk.cloud/external/api/update?token=TOKEN&Vn=val
- *
- * @param url  Fully-formed URL string.
- * @return ESP_OK on HTTP 200, error code otherwise.
- */
 static esp_err_t blynk_https_get(const char *url)
 {
     esp_http_client_config_t cfg = {
         .url            = url,
         .method         = HTTP_METHOD_GET,
         .timeout_ms     = 10000,
-        .crt_bundle_attach = esp_crt_bundle_attach,  /* ESP-IDF trust bundle */
+        .crt_bundle_attach = esp_crt_bundle_attach,
     };
 
     esp_http_client_handle_t client = esp_http_client_init(&cfg);
@@ -142,12 +107,6 @@ static esp_err_t blynk_https_get(const char *url)
     return ret;
 }
 
-/**
- * @brief Update a single Blynk virtual pin.
- *
- * @param pin   Pin name string, e.g. "V0".
- * @param value Value string.
- */
 static void blynk_update_pin(const char *pin, const char *value)
 {
     char encoded_value[128];
@@ -158,18 +117,13 @@ static void blynk_update_pin(const char *pin, const char *value)
              "https://" BLYNK_SERVER "/external/api/update"
              "?token=" BLYNK_AUTH_TOKEN "&%s=%s",
              pin, encoded_value);
+
     esp_err_t ret = blynk_https_get(url);
     if (ret == ESP_OK) {
         ESP_LOGD(TAG, "Updated %s = %s", pin, value);
     }
 }
 
-/**
- * @brief Send a Blynk push notification via logEvent.
- *
- * @param event_name  Event name defined in Blynk dashboard (BLYNK_EVENT_LEVEL).
- * @param description Short message shown in the notification.
- */
 static void blynk_log_event(const char *event_name, const char *description)
 {
     char encoded_desc[128];
@@ -187,9 +141,9 @@ static void blynk_log_event(const char *event_name, const char *description)
 }
 
 /**
- * @brief Push all 5 virtual pins + notification for a given level.
+ * @brief Push all 5 virtual pins + optional phone push notification.
  */
-static void blynk_push_level(water_level_t level)
+static void blynk_push_level(water_level_t level, bool send_notification)
 {
     if ((size_t)level >= LEVEL_INFO_COUNT) {
         level = WATER_LEVEL_INVALID;
@@ -217,17 +171,16 @@ static void blynk_push_level(water_level_t level)
     snprintf(int_str, sizeof(int_str), "%d", info->gpio23);
     blynk_update_pin(BLYNK_PIN_GPIO23, int_str);
 
-    /* Push notification */
-    char desc[64];
-    snprintf(desc, sizeof(desc), "%s (%d%%)", info->label, info->percent);
-    blynk_log_event(BLYNK_EVENT_LEVEL, desc);
+    /* Send phone push notification ONLY on genuine level change events */
+    if (send_notification) {
+        char desc[64];
+        snprintf(desc, sizeof(desc), "%s (%d%%)", info->label, info->percent);
+        blynk_log_event(BLYNK_EVENT_LEVEL, desc);
+    }
 
-    ESP_LOGI(TAG, "Blynk updated: %s (%d%%)", info->label, info->percent);
+    ESP_LOGI(TAG, "Blynk updated: %s (%d%%) (notify=%s)",
+             info->label, info->percent, send_notification ? "YES" : "NO");
 }
-
-/* =========================================================================
- * FreeRTOS task
- * ========================================================================= */
 
 static void blynk_task(void *arg)
 {
@@ -236,55 +189,51 @@ static void blynk_task(void *arg)
     /* Gate on Wi-Fi connected */
     xEventGroupWaitBits(g_system_event_group,
                         EVT_WIFI_CONNECTED,
-                        pdFALSE,   /* Don't clear */
+                        pdFALSE,
                         pdTRUE,
                         portMAX_DELAY);
 
-    ESP_LOGI(TAG, "Wi-Fi ready — pushing initial state to Blynk...");
+    ESP_LOGI(TAG, "Wi-Fi ready — pushing initial state to Blynk (no push notification)...");
 
-    /* Push the current level immediately on connect */
-    blynk_push_level(g_current_level);
+    /* Push the current level pins immediately on connect (without phone push notification) */
+    blynk_push_level(g_current_level, false);
 
-    /* Main loop: block on queue, push on every level change */
+    /* Main loop: block on queue, push on every genuine level change */
     level_event_t evt;
     for (;;) {
         if (xQueueReceive(g_blynk_queue,
                           &evt,
                           pdMS_TO_TICKS(15000)) == pdTRUE) {
 
-            /* Re-check Wi-Fi — if down, skip until next event */
             EventBits_t bits = xEventGroupGetBits(g_system_event_group);
             if (!(bits & EVT_WIFI_CONNECTED)) {
                 ESP_LOGW(TAG, "Wi-Fi down — skipping Blynk update");
                 continue;
             }
 
-            ESP_LOGI(TAG, "Level change received: %d — pushing to Blynk",
+            ESP_LOGI(TAG, "Level change event received: %d — pushing to Blynk + notification",
                      (int)evt.level);
-            blynk_push_level(evt.level);
+            /* Genuine level change -> update 5 pins + send phone push notification */
+            blynk_push_level(evt.level, true);
         } else {
-            /* Timeout (15 s): Periodic heartbeat — push full level snapshot (all 5 pins) */
+            /* Timeout (15 s): Periodic heartbeat — update virtual pins silently (NO push notification) */
             EventBits_t bits = xEventGroupGetBits(g_system_event_group);
             if (bits & EVT_WIFI_CONNECTED) {
-                blynk_push_level(g_current_level);
-                ESP_LOGD(TAG, "Heartbeat sync sent to Blynk (level=%d)", (int)g_current_level);
+                blynk_push_level(g_current_level, false);
+                ESP_LOGD(TAG, "Heartbeat sync sent to Blynk (level=%d, notify=NO)", (int)g_current_level);
             }
         }
     }
 }
-
-/* =========================================================================
- * Public API
- * ========================================================================= */
 
 esp_err_t blynk_task_start(void)
 {
     BaseType_t ret = xTaskCreate(
         blynk_task,
         "blynk_task",
-        8192,           /* 8 KB stack — HTTPS + TLS needs headroom */
+        8192,
         NULL,
-        2,              /* Priority 2 — below audio (3), above idle */
+        2,
         NULL
     );
 
