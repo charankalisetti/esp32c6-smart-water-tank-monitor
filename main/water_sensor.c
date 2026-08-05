@@ -42,6 +42,7 @@
 #include "freertos/queue.h"
 #include "driver/gpio.h"
 #include "esp_log.h"
+#include "esp_task_wdt.h"
 
 static const char *TAG = "WATER_SENSOR";
 
@@ -198,6 +199,9 @@ static void water_sensor_task(void *pvParameters)
     ESP_LOGI(TAG, "Poll interval: %u ms, debounce count: %u",
              WATER_SENSOR_POLL_MS, WATER_SENSOR_DEBOUNCE_COUNT);
 
+    /* Subscribe water_sensor_task to Task Watchdog Timer (TWDT) */
+    esp_task_wdt_add(NULL);
+
     /* Initialize state tracking */
     water_level_t confirmed_level  = WATER_LEVEL_INVALID; /* Force initial publish */
     water_level_t candidate_level  = WATER_LEVEL_INVALID;
@@ -205,6 +209,9 @@ static void water_sensor_task(void *pvParameters)
     uint8_t       last_bitmask     = 0xFF;                /* Sentinel: impossible */
 
     while (1) {
+        /* Reset Task Watchdog Timer on every poll cycle */
+        esp_task_wdt_reset();
+
         /* --- Sample GPIOs ------------------------------------------------ */
         uint8_t bitmask = sample_gpio_bitmask();
         water_level_t raw_level = bitmask_to_level(bitmask);

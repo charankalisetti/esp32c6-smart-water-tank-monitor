@@ -32,6 +32,7 @@
 
 #include "esp_log.h"
 #include "esp_err.h"
+#include "esp_task_wdt.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/event_groups.h"
 
@@ -52,6 +53,15 @@ esp_err_t app_main_run(void)
     ESP_LOGI(TAG, "============================================");
 
     esp_err_t ret;
+
+    /* Reconfigure Task Watchdog Timer (TWDT) for 15-second system recovery */
+    esp_task_wdt_config_t twdt_cfg = {
+        .timeout_ms = 15000,
+        .idle_core_mask = (1 << 0),
+        .trigger_panic = true,
+    };
+    esp_task_wdt_reconfigure(&twdt_cfg);
+    ESP_LOGI(TAG, "Task Watchdog Timer (TWDT) reconfigured (timeout=15 s, panic=true)");
 
     /* ------------------------------------------------------------------
      * Step 1: Create shared IPC objects (queue + event group)

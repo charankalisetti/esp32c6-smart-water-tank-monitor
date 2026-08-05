@@ -44,6 +44,7 @@
 #include "esp_log.h"
 #include "esp_err.h"
 #include "esp_check.h"
+#include "esp_task_wdt.h"
 
 static const char *TAG = "AUDIO_PLAYER";
 
@@ -162,6 +163,7 @@ static esp_err_t play_pcm_raw(const int16_t *pcm, size_t sample_count, const cha
     int16_t chunk_buf[256]; /* 512 bytes chunk buffer */
 
     while (sample_offset < sample_count) {
+        esp_task_wdt_reset();
         size_t samples_to_process = sample_count - sample_offset;
         if (samples_to_process > 256) {
             samples_to_process = 256;
@@ -226,11 +228,17 @@ static void audio_player_task(void *pvParameters)
 
     ESP_LOGI(TAG, "Task started — waiting for level change events");
 
+    /* Subscribe audio_player_task to Task Watchdog Timer (TWDT) */
+    esp_task_wdt_add(NULL);
+
     while (1) {
+        /* Reset Task Watchdog Timer periodically */
+        esp_task_wdt_reset();
+
         level_event_t event;
 
-        /* Block indefinitely until a level change event arrives */
-        if (xQueueReceive(g_level_change_queue, &event, portMAX_DELAY) != pdTRUE) {
+        /* Wait up to 5 seconds for a level change event, feeding TWDT when idle */
+        if (xQueueReceive(g_level_change_queue, &event, pdMS_TO_TICKS(5000)) != pdTRUE) {
             continue;
         }
 
