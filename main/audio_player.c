@@ -24,7 +24,6 @@
 #include "audio_player.h"
 #include "app_events.h"
 #include "gpio_config.h"
-#include "buzzer.h"
 
 #include "audio/tank_empty.h"
 #include "audio/water_low.h"
@@ -298,9 +297,6 @@ static void audio_player_task(void *pvParameters)
 
         /* Mark audio as idle */
         xEventGroupClearBits(g_system_event_group, EVT_AUDIO_PLAYING);
-
-        /* Trigger non-blocking 12V active buzzer pattern after voice announcement finishes */
-        buzzer_play_pattern(event.level);
     }
 
     vTaskDelete(NULL);

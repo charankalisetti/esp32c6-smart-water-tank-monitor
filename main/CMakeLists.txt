@@ -14,7 +14,6 @@ idf_component_register(
         "gpio_config.c"
         "water_sensor.c"
         "audio_player.c"
-        "buzzer.c"
         "audio/audio_clips.c"
         "audio/tank_empty_te.c"
         "audio/water_low_te.c"
