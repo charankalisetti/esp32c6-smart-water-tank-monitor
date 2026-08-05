@@ -1,12 +1,11 @@
 /**
  * @file wifi_manager.c
- * @brief Wi-Fi Station mode manager — connects ESP32-C6 to home router.
+ * @brief Enterprise-grade Wi-Fi Station manager with dual-router failover & exponential backoff jitter.
  *
- * Uses the ESP-IDF event-loop WiFi API. On successful IP acquisition,
- * sets EVT_WIFI_CONNECTED in g_system_event_group so dependent tasks
- * (Blynk client) can begin network operations.
- *
- * Reconnection strategy: infinite retry with 3-second back-off.
+ * Reconnection strategy:
+ *   1. Exponential backoff with randomized jitter (2s -> 4s -> 8s -> 16s -> 32s -> 60s max).
+ *   2. Automatic dual-router failover (switches between primary "railwirefibernet" and secondary "BSNL Fiber" after 5 failures).
+ *   3. Reset retry counters on IP acquisition.
  *
  * @author Senior ESP-IDF Embedded Systems Engineer
  */
@@ -19,6 +18,7 @@
 #include "esp_event.h"
 #include "esp_log.h"
 #include "esp_netif.h"
+#include "esp_random.h"
 #include "esp_sntp.h"
 #include "esp_wifi.h"
 #include "freertos/FreeRTOS.h"
@@ -49,12 +49,12 @@ static int s_disconnect_count = 0;
 
 static void switch_to_next_network(void)
 {
-    s_net_index = (s_net_index + 1) % 2;
+    s_net_index = (s_net_index + 1) % (sizeof(DUAL_NETWORKS) / sizeof(DUAL_NETWORKS[0]));
     s_disconnect_count = 0;
 
     const wifi_net_entry_t *target = &DUAL_NETWORKS[s_net_index];
     ESP_LOGI(TAG, "=========================================================");
-    ESP_LOGI(TAG, " 🔄 AUTO-FAILOVER: Switching to Network #%d: \"%s\"", (int)s_net_index + 1, target->ssid);
+    ESP_LOGI(TAG, " 🔄 DUAL-ROUTER FAILOVER: Switching to Router #%d: \"%s\"", (int)s_net_index + 1, target->ssid);
     ESP_LOGI(TAG, "=========================================================");
 
     wifi_config_t wifi_cfg = {0};
@@ -65,6 +65,28 @@ static void switch_to_next_network(void)
     esp_wifi_disconnect();
     esp_wifi_set_config(WIFI_IF_STA, &wifi_cfg);
     esp_wifi_connect();
+}
+
+/**
+ * @brief Calculate exponential backoff delay with randomized jitter (+-20%).
+ */
+static uint32_t calculate_backoff_delay_ms(int attempt)
+{
+    uint32_t base_ms = 2000;
+    int shift = attempt > 5 ? 5 : attempt;
+    uint32_t delay_ms = base_ms * (1U << shift);
+    if (delay_ms > 60000) {
+        delay_ms = 60000;
+    }
+
+    /* Add jitter: +-20% of delay_ms */
+    uint32_t max_jitter = delay_ms / 5;
+    if (max_jitter > 0) {
+        int32_t jitter = (esp_random() % (max_jitter * 2 + 1)) - max_jitter;
+        int32_t final_ms = (int32_t)delay_ms + jitter;
+        return final_ms < 1000 ? 1000 : (uint32_t)final_ms;
+    }
+    return delay_ms;
 }
 
 /* =========================================================================
@@ -85,16 +107,19 @@ static void wifi_event_handler(void *arg, esp_event_base_t event_base,
       wifi_event_sta_disconnected_t *disc =
           (wifi_event_sta_disconnected_t *)event_data;
       s_disconnect_count++;
-      ESP_LOGW(TAG, "Disconnected from \"%s\" (reason %d, attempt %d/3)...",
-               DUAL_NETWORKS[s_net_index].ssid, disc->reason, s_disconnect_count);
-      
-      /* Clear connected bit so Blynk/Sinric know link is down */
+
+      /* Clear connected bit so dependent cloud tasks know link is down */
       xEventGroupClearBits(g_system_event_group, EVT_WIFI_CONNECTED);
 
-      if (s_disconnect_count >= 3) {
+      if (s_disconnect_count >= 5) {
+          ESP_LOGW(TAG, "Disconnected from \"%s\" (reason %d) — 5 retries exhausted.",
+                   DUAL_NETWORKS[s_net_index].ssid, disc->reason);
           switch_to_next_network();
       } else {
-          vTaskDelay(pdMS_TO_TICKS(2000));
+          uint32_t backoff_ms = calculate_backoff_delay_ms(s_disconnect_count);
+          ESP_LOGW(TAG, "Disconnected from \"%s\" (reason %d, attempt %d/5) — retrying in %lu ms...",
+                   DUAL_NETWORKS[s_net_index].ssid, disc->reason, s_disconnect_count, (unsigned long)backoff_ms);
+          vTaskDelay(pdMS_TO_TICKS(backoff_ms));
           esp_wifi_connect();
       }
       break;
