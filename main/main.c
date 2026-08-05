@@ -34,11 +34,10 @@ void app_main(void)
     }
 
     /*
-     * app_main() must not return (ESP-IDF deletes the main task if it does).
-     * Keep it alive with a low-priority delay loop.  The real work is done
-     * in the FreeRTOS tasks created by app_main_run().
+     * Cleanly delete the app_main task to reclaim its stack RAM (~3 KB).
+     * Background FreeRTOS tasks (water_sensor, audio_player, blynk, sinric,
+     * night_sleep) continue executing independently.
      */
-    while (1) {
-        vTaskDelay(pdMS_TO_TICKS(10000));
-    }
+    ESP_LOGI(TAG, "Initialization complete — deleting main task to reclaim RAM");
+    vTaskDelete(NULL);
 }
