@@ -20,6 +20,7 @@ static const char *TAG = "APP_EVENTS";
 
 QueueHandle_t     g_level_change_queue  = NULL;
 EventGroupHandle_t g_system_event_group = NULL;
+SemaphoreHandle_t  g_tls_handshake_mutex = NULL;
 
 /* Current water level — written only by water_sensor_task, read by blynk_task */
 volatile water_level_t g_current_level  = WATER_LEVEL_EMPTY;
@@ -49,6 +50,14 @@ esp_err_t app_events_init(void)
         return ESP_ERR_NO_MEM;
     }
     ESP_LOGI(TAG, "System event group created");
+
+    /* --- Create the TLS handshake mutex --------------------------------- */
+    g_tls_handshake_mutex = xSemaphoreCreateMutex();
+    if (g_tls_handshake_mutex == NULL) {
+        ESP_LOGE(TAG, "Failed to create g_tls_handshake_mutex");
+        return ESP_ERR_NO_MEM;
+    }
+    ESP_LOGI(TAG, "TLS handshake serialization mutex created");
 
     return ESP_OK;
 }

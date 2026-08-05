@@ -299,8 +299,17 @@ static bool sinric_ws_connect(void)
     s_tls = esp_tls_init();
     if (!s_tls) { ESP_LOGE(TAG, "esp_tls_init failed"); return false; }
 
+    if (g_tls_handshake_mutex != NULL) {
+        xSemaphoreTake(g_tls_handshake_mutex, portMAX_DELAY);
+    }
+
     int ret = esp_tls_conn_new_sync("ws.sinric.pro", strlen("ws.sinric.pro"),
                                      443, &tls_cfg, s_tls);
+
+    if (g_tls_handshake_mutex != NULL) {
+        xSemaphoreGive(g_tls_handshake_mutex);
+    }
+
     if (ret != 1) {
         ESP_LOGE(TAG, "TLS connect failed: %d", ret);
         esp_tls_conn_destroy(s_tls); s_tls = NULL; return false;

@@ -118,7 +118,16 @@ static esp_err_t blynk_https_get(const char *url)
         return ESP_FAIL;
     }
 
+    if (g_tls_handshake_mutex != NULL) {
+        xSemaphoreTake(g_tls_handshake_mutex, portMAX_DELAY);
+    }
+
     esp_err_t ret = esp_http_client_perform(client);
+
+    if (g_tls_handshake_mutex != NULL) {
+        xSemaphoreGive(g_tls_handshake_mutex);
+    }
+
     if (ret == ESP_OK) {
         int status = esp_http_client_get_status_code(client);
         if (status != 200) {

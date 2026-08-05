@@ -24,6 +24,7 @@
 #include "freertos/FreeRTOS.h"
 #include "freertos/queue.h"
 #include "freertos/event_groups.h"
+#include "freertos/semphr.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -116,6 +117,12 @@ extern QueueHandle_t g_level_change_queue;
  * Read by: any task that must gate on system state
  */
 extern EventGroupHandle_t g_system_event_group;
+
+/**
+ * @brief Mutex serializing cloud TLS handshakes across Blynk and Sinric Pro.
+ * Prevents simultaneous TLS dynamic heap allocations (~80 KB peak).
+ */
+extern SemaphoreHandle_t g_tls_handshake_mutex;
 
 /**
  * @brief Current water level — updated atomically by water_sensor_task
