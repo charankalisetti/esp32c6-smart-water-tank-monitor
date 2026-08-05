@@ -29,6 +29,7 @@
 #include "blynk_client.h"
 #include "sinric_client.h"
 #include "night_sleep.h"
+#include "sys_diagnostics.h"
 
 #include "esp_log.h"
 #include "esp_err.h"
@@ -139,6 +140,9 @@ esp_err_t app_main_run(void)
 
     /* Initialize Nighttime Deep Sleep & Timezone */
     night_sleep_init();
+
+    /* Initialize System Diagnostics & Health Telemetry Task */
+    sys_diagnostics_init();
     night_sleep_start_monitor_task();
 
     /* ------------------------------------------------------------------

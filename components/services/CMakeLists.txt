@@ -2,10 +2,13 @@ idf_component_register(
     SRCS
         "app_events.c"
         "night_sleep.c"
+        "sys_diagnostics.c"
     INCLUDE_DIRS
         "."
     REQUIRES
         freertos
         log
         esp_common
+        esp_timer
+        esp_wifi
 )
