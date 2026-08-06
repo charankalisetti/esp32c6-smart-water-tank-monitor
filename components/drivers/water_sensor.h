@@ -26,7 +26,7 @@ extern "C" {
  * ========================================================================= */
 
 /** Stack size (bytes) allocated to the sensor polling task. */
-#define WATER_SENSOR_TASK_STACK   2048u
+#define WATER_SENSOR_TASK_STACK   4096u
 
 /** FreeRTOS priority for the sensor task (low — it only polls GPIOs). */
 #define WATER_SENSOR_TASK_PRIORITY  2u

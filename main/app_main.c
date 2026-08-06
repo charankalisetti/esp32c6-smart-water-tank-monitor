@@ -49,7 +49,7 @@ esp_err_t app_main_run(void)
     ESP_LOGI(TAG, " IoT Water Tank Level Monitor — Booting");
     ESP_LOGI(TAG, " Board : ESP32-C6 DevKitC-1 v1.2");
     ESP_LOGI(TAG, " Amp   : MAX98357A (GPIO18/19/20)");
-    ESP_LOGI(TAG, " Probes: Low=GPIO10, Med=GPIO11, Full=GPIO23");
+    ESP_LOGI(TAG, " Probes: Low=GPIO10, Med=GPIO11, Full=GPIO22");
     ESP_LOGI(TAG, " Cloud : Blynk IoT (blynk.cloud)");
     ESP_LOGI(TAG, "============================================");
 

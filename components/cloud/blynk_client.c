@@ -167,9 +167,9 @@ static void blynk_push_level(water_level_t level, bool send_notification)
     snprintf(int_str, sizeof(int_str), "%d", info->gpio11);
     blynk_update_pin(BLYNK_PIN_GPIO11, int_str);
 
-    /* V4 — GPIO23 (Full probe) */
+    /* V4 — GPIO22 (Full probe) */
     snprintf(int_str, sizeof(int_str), "%d", info->gpio23);
-    blynk_update_pin(BLYNK_PIN_GPIO23, int_str);
+    blynk_update_pin(BLYNK_PIN_GPIO22, int_str);
 
     /* Send phone push notification ONLY on genuine level change events */
     if (send_notification) {

@@ -46,7 +46,7 @@
 #define BLYNK_PIN_PERCENT   "V1"
 #define BLYNK_PIN_GPIO10    "V2"
 #define BLYNK_PIN_GPIO11    "V3"
-#define BLYNK_PIN_GPIO23    "V4"
+#define BLYNK_PIN_GPIO22    "V4"
 
 /** Blynk event name used for push notifications (create in Blynk dashboard). */
 #define BLYNK_EVENT_LEVEL   "level_change"

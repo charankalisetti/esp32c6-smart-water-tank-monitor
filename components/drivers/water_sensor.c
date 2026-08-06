@@ -135,7 +135,7 @@ static void print_level_report(uint8_t bitmask, water_level_t level)
     /* Decode individual GPIO states from bitmask for readability */
     const char *gpio10 = (bitmask & 0b001) ? "HIGH" : "LOW";
     const char *gpio11 = (bitmask & 0b010) ? "HIGH" : "LOW";
-    const char *gpio23 = (bitmask & 0b100) ? "HIGH" : "LOW";
+    const char *gpio22 = (bitmask & 0b100) ? "HIGH" : "LOW";
 
     const char *level_name;
     const char *pct;
@@ -157,7 +157,7 @@ static void print_level_report(uint8_t bitmask, water_level_t level)
     printf("\n---------------------------------\n");
     printf("GPIO10 %s\n", gpio10);
     printf("GPIO11 %s\n", gpio11);
-    printf("GPIO23 %s\n", gpio23);
+    printf("GPIO22 %s\n", gpio22);
     printf("Water Level   : %s\n", level_name);
     printf("Estimated Water: %s\n", pct);
     printf("---------------------------------\n\n");
@@ -222,7 +222,7 @@ static void water_sensor_task(void *pvParameters)
             if (bitmask != last_bitmask) {
                 ESP_LOGW(TAG,
                     "SENSOR FAULT — impossible GPIO combination detected "
-                    "(GPIO10=%s GPIO11=%s GPIO23=%s bitmask=0b%03u). "
+                    "(GPIO10=%s GPIO11=%s GPIO22=%s bitmask=0b%03u). "
                     "Check probe wiring.",
                     (bitmask & 0b001) ? "HIGH" : "LOW",
                     (bitmask & 0b010) ? "HIGH" : "LOW",
@@ -231,11 +231,39 @@ static void water_sensor_task(void *pvParameters)
                 xEventGroupSetBits(g_system_event_group, EVT_SENSOR_FAULT);
                 last_bitmask = bitmask;
             }
+            /* Log GPIO state every 2 seconds (40 polls × 50ms) for live debug */
+            static uint32_t fault_log_count = 0;
+            fault_log_count++;
+            if (fault_log_count >= 40) {
+                fault_log_count = 0;
+                ESP_LOGI(TAG, "[DEBUG] GPIO10=%s GPIO11=%s GPIO22=%s bitmask=0b%03u Level=FAULT",
+                    (bitmask & 0b001) ? "HIGH/DRY" : "LOW/WET",
+                    (bitmask & 0b010) ? "HIGH/DRY" : "LOW/WET",
+                    (bitmask & 0b100) ? "HIGH/DRY" : "LOW/WET",
+                    bitmask);
+            }
             /* Reset debounce so we don't carry stale candidate state */
             debounce_counter = 0;
             candidate_level  = WATER_LEVEL_INVALID;
             vTaskDelay(pdMS_TO_TICKS(WATER_SENSOR_POLL_MS));
             continue;
+        }
+
+        /* --- Log valid GPIO state every 2 seconds for live debug ----------- */
+        {
+            static uint32_t dbg_log_count = 0;
+            dbg_log_count++;
+            if (dbg_log_count >= 40) {
+                dbg_log_count = 0;
+                ESP_LOGI(TAG, "[DEBUG] GPIO10=%s GPIO11=%s GPIO22=%s bitmask=0b%03u Level=%s debounce=%u/%u",
+                    (bitmask & 0b001) ? "HIGH/DRY" : "LOW/WET",
+                    (bitmask & 0b010) ? "HIGH/DRY" : "LOW/WET",
+                    (bitmask & 0b100) ? "HIGH/DRY" : "LOW/WET",
+                    bitmask,
+                    level_to_string(raw_level),
+                    debounce_counter,
+                    WATER_SENSOR_DEBOUNCE_COUNT);
+            }
         }
 
         /* --- Debounce logic ---------------------------------------------- */

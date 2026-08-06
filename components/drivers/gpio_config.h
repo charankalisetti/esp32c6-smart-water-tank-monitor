@@ -51,7 +51,7 @@ extern "C" {
 #ifdef CONFIG_WATER_PROBE_FULL_GPIO
 #define SENSOR_GPIO_FULL    ((gpio_num_t)CONFIG_WATER_PROBE_FULL_GPIO)
 #else
-#define SENSOR_GPIO_FULL    GPIO_NUM_23
+#define SENSOR_GPIO_FULL    GPIO_NUM_22
 #endif
 
 /* =========================================================================

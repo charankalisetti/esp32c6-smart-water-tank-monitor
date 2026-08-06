@@ -47,8 +47,9 @@ CHANNELS     = 1        # Mono
 SAMPLE_WIDTH = 2        # 16-bit = 2 bytes
 
 SCRIPT_DIR  = Path(__file__).parent
-OUTPUT_FILE = SCRIPT_DIR / "main" / "audio" / "audio_clips.c"
+OUTPUT_FILE = SCRIPT_DIR / "components" / "drivers" / "audio" / "audio_clips.c"
 
+# English clips for audio_clips.c
 CLIPS = [
     ("tank_empty",    "Tank Empty",                    "Tank Empty"),
     ("water_low",     "Water Level Low",               "Water Level Low"),

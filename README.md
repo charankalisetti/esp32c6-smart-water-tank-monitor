@@ -15,7 +15,7 @@ esp32c6_max98357a_sine/
 │   ├── app_main.c / .h         # Subsystem orchestrator
 ├── components/
 │   ├── drivers/                # Hardware Abstraction Layer
-│   │   ├── water_sensor.c/h    # Probes polling & debouncing (GPIO10, 11, 23)
+│   │   ├── water_sensor.c/h    # Probes polling & debouncing (GPIO10, 11, 22)
 │   │   ├── audio_player.c/h    # MAX98357A I2S driver (GPIO18, 19, 20)
 │   │   ├── gpio_config.c/h     # Pinout configuration
 │   │   └── audio/              # PCM Telugu & English voice clips
@@ -41,7 +41,7 @@ esp32c6_max98357a_sine/
 | **MAX98357A** | DIN | `GPIO20` | Data Input |
 | **Probe (Low)** | Level 1 | `GPIO10` | Low Level Probe (Pull-up) |
 | **Probe (Med)** | Level 2 | `GPIO11` | Medium Level Probe (Pull-up) |
-| **Probe (Full)**| Level 3 | `GPIO23` | Full Level Probe (Pull-up) |
+| **Probe (Full)**| Level 3 | `GPIO22` | Full Level Probe (Pull-up) |
 
 ---
 
