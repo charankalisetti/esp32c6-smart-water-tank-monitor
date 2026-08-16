@@ -26,8 +26,12 @@ static const char *TAG = "GPIO_CFG";
  * ========================================================================= */
 
 /**
- * @brief Configure a single GPIO as input with pull-up, no pull-down,
- *        and interrupts disabled.
+ * @brief Configure a single GPIO as input with NO pull-up (floating).
+ *
+ * Anti-corrosion design: GPIOs start floating (zero current through water).
+ * The water_sensor_task enables pull-ups for a brief 2ms pulse during each
+ * sample, then disables them again. This reduces electrolysis corrosion
+ * by ~2500x compared to always-on pull-ups.
  *
  * @param pin  GPIO number to configure.
  * @return ESP_OK on success.
@@ -37,7 +41,7 @@ static esp_err_t configure_sensor_pin(gpio_num_t pin)
     gpio_config_t io_conf = {
         .pin_bit_mask = (1ULL << pin),         /* Select this specific pin      */
         .mode         = GPIO_MODE_INPUT,        /* Input only — MCU never drives */
-        .pull_up_en   = GPIO_PULLUP_ENABLE,     /* Hold HIGH when probe is dry   */
+        .pull_up_en   = GPIO_PULLUP_DISABLE,    /* OFF by default (anti-corrosion) */
         .pull_down_en = GPIO_PULLDOWN_DISABLE,  /* No competing pull-down        */
         .intr_type    = GPIO_INTR_DISABLE,      /* Polled — no ISR needed        */
     };
@@ -48,7 +52,7 @@ static esp_err_t configure_sensor_pin(gpio_num_t pin)
         return ret;
     }
 
-    ESP_LOGI(TAG, "GPIO%d configured — INPUT, PULL_UP enabled", pin);
+    ESP_LOGI(TAG, "GPIO%d configured — INPUT, FLOATING (anti-corrosion mode)", pin);
     return ESP_OK;
 }
 

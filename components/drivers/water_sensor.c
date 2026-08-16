@@ -73,19 +73,43 @@ static const sensor_map_entry_t SENSOR_MAP[] = {
  * ========================================================================= */
 
 /**
- * @brief Sample all three sensor GPIOs and pack into a 3-bit bitmask.
+ * @brief Pulsed strobe sampling: enable pull-ups → wait → read → disable.
+ *
+ * Anti-corrosion design:
+ *   1. Enable internal pull-ups on all 3 probe GPIOs (current starts flowing).
+ *   2. Wait WATER_SENSOR_STROBE_MS (2 ms) for voltage to stabilize.
+ *   3. Read all 3 GPIO levels.
+ *   4. Immediately disable pull-ups (current stops — probes go floating).
+ *
+ * Result: current flows through water for only 2 ms per 5-second cycle
+ * (0.04% duty), reducing electrolysis corrosion by ~2500x.
  *
  *  bit 0 = GPIO10 level (1 = HIGH/dry)
  *  bit 1 = GPIO11 level (1 = HIGH/dry)
- *  bit 2 = GPIO23 level (1 = HIGH/dry)
+ *  bit 2 = GPIO22 level (1 = HIGH/dry)
  *
  * @return uint8_t bitmask, value 0–7.
  */
 static inline uint8_t sample_gpio_bitmask(void)
 {
+    /* Step 1: Enable pull-ups — current starts flowing through water */
+    gpio_set_pull_mode(SENSOR_GPIO_LOW,    GPIO_PULLUP_ONLY);
+    gpio_set_pull_mode(SENSOR_GPIO_MEDIUM, GPIO_PULLUP_ONLY);
+    gpio_set_pull_mode(SENSOR_GPIO_FULL,   GPIO_PULLUP_ONLY);
+
+    /* Step 2: Wait for voltage to stabilize (2 ms) */
+    vTaskDelay(pdMS_TO_TICKS(WATER_SENSOR_STROBE_MS));
+
+    /* Step 3: Read all 3 GPIOs */
     uint8_t low    = (uint8_t)gpio_get_level(SENSOR_GPIO_LOW);
     uint8_t medium = (uint8_t)gpio_get_level(SENSOR_GPIO_MEDIUM);
     uint8_t full   = (uint8_t)gpio_get_level(SENSOR_GPIO_FULL);
+
+    /* Step 4: Disable pull-ups immediately — current stops */
+    gpio_set_pull_mode(SENSOR_GPIO_LOW,    GPIO_FLOATING);
+    gpio_set_pull_mode(SENSOR_GPIO_MEDIUM, GPIO_FLOATING);
+    gpio_set_pull_mode(SENSOR_GPIO_FULL,   GPIO_FLOATING);
+
     return (uint8_t)((full << 2) | (medium << 1) | (low << 0));
 }
 
@@ -195,9 +219,12 @@ static void water_sensor_task(void *pvParameters)
         portMAX_DELAY   /* Block indefinitely until ready */
     );
 
-    ESP_LOGI(TAG, "GPIO_READY received — beginning sensor polling");
-    ESP_LOGI(TAG, "Poll interval: %u ms, debounce count: %u",
-             WATER_SENSOR_POLL_MS, WATER_SENSOR_DEBOUNCE_COUNT);
+    ESP_LOGI(TAG, "GPIO_READY received — beginning pulsed sensor polling (anti-corrosion mode)");
+    ESP_LOGI(TAG, "Poll interval: %u ms, strobe pulse: %u ms, debounce count: %u",
+             WATER_SENSOR_POLL_MS, WATER_SENSOR_STROBE_MS, WATER_SENSOR_DEBOUNCE_COUNT);
+    ESP_LOGI(TAG, "Corrosion duty cycle: %.2f%% (pull-ups ON %u ms every %u ms)",
+             (float)WATER_SENSOR_STROBE_MS / WATER_SENSOR_POLL_MS * 100.0f,
+             WATER_SENSOR_STROBE_MS, WATER_SENSOR_POLL_MS);
 
     /* Subscribe water_sensor_task to Task Watchdog Timer (TWDT) */
     esp_task_wdt_add(NULL);
@@ -231,10 +258,10 @@ static void water_sensor_task(void *pvParameters)
                 xEventGroupSetBits(g_system_event_group, EVT_SENSOR_FAULT);
                 last_bitmask = bitmask;
             }
-            /* Log GPIO state every 2 seconds (40 polls × 50ms) for live debug */
+            /* Log GPIO state every 10 seconds (2 polls × 5s) for live debug */
             static uint32_t fault_log_count = 0;
             fault_log_count++;
-            if (fault_log_count >= 40) {
+            if (fault_log_count >= 2) {
                 fault_log_count = 0;
                 ESP_LOGI(TAG, "[DEBUG] GPIO10=%s GPIO11=%s GPIO22=%s bitmask=0b%03u Level=FAULT",
                     (bitmask & 0b001) ? "HIGH/DRY" : "LOW/WET",
@@ -251,9 +278,10 @@ static void water_sensor_task(void *pvParameters)
 
         /* --- Log valid GPIO state every 2 seconds for live debug ----------- */
         {
+            /* Log valid GPIO state every 10 seconds (2 polls × 5s) */
             static uint32_t dbg_log_count = 0;
             dbg_log_count++;
-            if (dbg_log_count >= 40) {
+            if (dbg_log_count >= 2) {
                 dbg_log_count = 0;
                 ESP_LOGI(TAG, "[DEBUG] GPIO10=%s GPIO11=%s GPIO22=%s bitmask=0b%03u Level=%s debounce=%u/%u",
                     (bitmask & 0b001) ? "HIGH/DRY" : "LOW/WET",

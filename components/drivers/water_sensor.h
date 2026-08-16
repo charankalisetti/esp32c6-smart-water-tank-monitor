@@ -32,19 +32,24 @@ extern "C" {
 #define WATER_SENSOR_TASK_PRIORITY  2u
 
 /** GPIO poll interval in milliseconds.
- *  50 ms gives 20 readings/second — fast enough to catch transitions,
- *  slow enough to avoid unnecessary CPU load and GPIO bounce issues. */
-#define WATER_SENSOR_POLL_MS        50u
+ *  5000 ms (5 seconds) between pulsed strobe samples.
+ *  Anti-corrosion: pull-ups are only ON for 2ms every 5 seconds (0.04% duty).
+ *  Water level changes over minutes — 5 second detection is instant enough. */
+#define WATER_SENSOR_POLL_MS        5000u
+
+/** Duration in milliseconds to enable pull-ups before sampling GPIOs.
+ *  2 ms is sufficient for the internal pull-up (~45kΩ) to charge the GPIO
+ *  capacitance and stabilize the digital reading. */
+#define WATER_SENSOR_STROBE_MS      2u
 
 /**
  * @brief Number of consecutive identical readings required to accept a
  *        new level as valid (debounce).
  *
- *  50 ms × 20 = 1000 ms (1 second) debounce window.
+ *  5000 ms × 3 = 15000 ms (15 seconds) debounce window.
  *  Eliminates false triggers from water surface ripple at probe threshold.
- *  Increase further if oscillation persists (e.g., 40 = 2 seconds).
  */
-#define WATER_SENSOR_DEBOUNCE_COUNT  20u
+#define WATER_SENSOR_DEBOUNCE_COUNT  3u
 
 /* =========================================================================
  * Public API
