@@ -7,7 +7,7 @@ An enterprise-grade, ultra-reliable IoT firmware designed for the **ESP32-C6 Dev
 ## 🌟 Key Features
 
 - 🔊 **Bilingual Voice Announcements**: Real 16 kHz 16-bit PCM voice clips in **English** and **Telugu** played through MAX98357A I2S amplifier with +6 dB normalized loudness.
-- 🛡️ **Anti-Corrosion Pulsed Sensing**: Reduces DC electrolysis corrosion by **2,500x** using 2ms strobe pulses every 5 seconds (0.04% duty cycle). Probes remain unpowered and floating 99.96% of the time.
+- 🛡️ **Anti-Corrosion Pulsed Sensing**: Reduces DC electrolysis corrosion by **5,000x** using 2ms strobe pulses every 10 seconds (0.02% duty cycle). Probes remain unpowered and floating 99.98% of the time.
 - 🚦 **Dedicated Multi-Queue IPC**: Isolated FreeRTOS queues for Audio, Blynk, and Sinric Pro to eliminate task starvation and race conditions.
 - ☁️ **Dual Cloud Synchronization**:
   - **Blynk IoT REST API**: Real-time water percentage, probe state indicators (`V0`–`V4`), and smart push notification filtering.
@@ -45,15 +45,15 @@ TIME ─────────────────────────
 
 Pull-up State:  █                                █
                 ▏◄─ 2ms ON ─►                   ▏◄─ 2ms ON ─►
-                ◄──────────── 5000ms (5s) ──────────────────►
+                ◄──────────── 10000ms (10s) ─────────────────►
                          ▲
-                      4998ms OFF (0V, Floating)
+                      9998ms OFF (0V, Floating)
                    (ZERO current, ZERO corrosion)
 ```
 
 1. **Floating by Default**: GPIO pull-ups are completely disabled between reads.
-2. **2ms Pulse**: Every 5 seconds, pull-ups activate for only 2 milliseconds to take a reading, then immediately shut off.
-3. **99.96% Powerless**: Current duty cycle is reduced to **0.04%**, extending probe lifespan by **2,500x**.
+2. **2ms Pulse**: Every 10 seconds, pull-ups activate for only 2 milliseconds to take a reading, then immediately shut off.
+3. **99.98% Powerless**: Current duty cycle is reduced to **0.02%**, extending probe lifespan by **5,000x**.
 
 ---
 

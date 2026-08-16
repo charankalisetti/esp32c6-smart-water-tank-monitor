@@ -255,11 +255,11 @@ static void water_sensor_task(void *pvParameters)
         uint8_t bitmask = sample_gpio_bitmask();
         water_level_t raw_level = bitmask_to_level(bitmask);
 
-        /* --- Periodic debug log every 10 seconds ------------------------ */
+        /* --- Periodic debug log every 10 seconds (1 poll × 10s) -------- */
         {
             static uint32_t dbg_log_count = 0;
             dbg_log_count++;
-            if (dbg_log_count >= 2) {
+            if (dbg_log_count >= 1) {
                 dbg_log_count = 0;
                 ESP_LOGI(TAG, "[DEBUG] GPIO10=%s GPIO11=%s GPIO22=%s bitmask=0b%03u Level=%s debounce=%u/%u",
                     (bitmask & 0b001) ? "HIGH/DRY" : "LOW/WET",
