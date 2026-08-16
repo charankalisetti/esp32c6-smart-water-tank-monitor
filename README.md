@@ -83,10 +83,23 @@ sequenceDiagram
 ```
 
 ### Auto-Recovery Timeline:
-1. **0–1 Seconds**: Bootloader starts, loads Wi-Fi credentials from Non-Volatile Flash (NVS), initializes I2S audio driver, FreeRTOS multi-queues, and Task Watchdog Timer.
-2. **15 Seconds**: Sensor probes complete 3-sample debounce (5s × 3) and confirm the exact tank water level.
+1. **0–1 Seconds (Instant Boot)**: Bootloader starts, loads Wi-Fi credentials from Non-Volatile Flash (NVS), initializes I2S audio driver, FreeRTOS multi-queues, and Task Watchdog Timer.
+2. **15 Seconds (Probe Stabilization)**: Sensor probes complete 3-sample debounce (5s × 3) and confirm the exact tank water level.
 3. **Voice Announcement**: Speaker immediately announces the current level (*"Water Level Sixty One Percent"* / *"నీటి మట్టం అరవై ఒక్క శాతం ఉంది"*).
-4. **Cloud Auto-Sync**: If the Wi-Fi router takes 1–2 minutes to reboot, `wifi_manager` uses exponential backoff to reconnect automatically. Once online, Blynk and Google Home update without triggering spam push alerts.
+
+> [!IMPORTANT]
+> ### 🌐 4. Wi-Fi & Cloud Auto-Reconnection (Zero-Intervention Reconnect)
+>
+> - **Router Reboot Delay Tolerance**: If your home Wi-Fi router takes **1–2 minutes** to restart after a power cut, the firmware's `wifi_manager` uses **exponential backoff with jitter** (`2s -> 4s -> 8s -> ... -> 60s ± 20%`) to continually retry in the background without freezing, blocking other tasks, or flooding the router.
+>
+> - **🟢 Blynk IoT Cloud Reconnect**:
+>   - Device status automatically flips to **Online** on the Blynk mobile app & web dashboard.
+>   - Virtual pins `V0`–`V4` immediately update with the real-time water percentage and probe states.
+>   - **Spam Suppression**: The initial connection sync suppresses phone push notifications to prevent false alarm alerts when power returns.
+>
+> - **🗣️ Sinric Pro / Google Home Reconnect**:
+>   - WebSocket connection automatically re-establishes with `ws.sinric.pro`.
+>   - Google Assistant integration is instantly ready for voice inquiries (*"Hey Google, what is the water level?"*).
 
 ---
 
