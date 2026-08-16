@@ -92,12 +92,16 @@ sequenceDiagram
 >
 > - **Router Reboot Delay Tolerance**: If your home Wi-Fi router takes **1–2 minutes** to restart after a power cut, the firmware's `wifi_manager` uses **exponential backoff with jitter** (`2s -> 4s -> 8s -> ... -> 60s ± 20%`) to continually retry in the background without freezing, blocking other tasks, or flooding the router.
 >
-> - **🟢 Blynk IoT Cloud Reconnect**:
->   - Device status automatically flips to **Online** on the Blynk mobile app & web dashboard.
+> ---
+>
+> ### 🚀 **ONCE WI-FI IS CONNECTED:**
+>
+> - **🟢 Blynk IoT Cloud Synchronization**:
+>   - Device status automatically flips to **`ONLINE`** on the Blynk mobile app & web dashboard.
 >   - Virtual pins `V0`–`V4` immediately update with the real-time water percentage and probe states.
 >   - **Spam Suppression**: The initial connection sync suppresses phone push notifications to prevent false alarm alerts when power returns.
 >
-> - **🗣️ Sinric Pro / Google Home Reconnect**:
+> - **🗣️ Sinric Pro / Google Home Integration**:
 >   - WebSocket connection automatically re-establishes with `ws.sinric.pro`.
 >   - Google Assistant integration is instantly ready for voice inquiries (*"Hey Google, what is the water level?"*).
 
