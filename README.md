@@ -94,16 +94,30 @@ sequenceDiagram
 >
 > ---
 >
-> ### 🚀 **ONCE WI-FI IS CONNECTED:**
+> ### 🚀 **ONCE WI-FI IS CONNECTED — Automatic Cloud Orchestration:**
 >
-> - **🟢 Blynk IoT Cloud Synchronization**:
->   - Device status automatically flips to **`ONLINE`** on the Blynk mobile app & web dashboard.
->   - Virtual pins `V0`–`V4` immediately update with the real-time water percentage and probe states.
->   - **Spam Suppression**: The initial connection sync suppresses phone push notifications to prevent false alarm alerts when power returns.
+> The moment Wi-Fi establishes an IP address, the firmware signals `EVT_WIFI_CONNECTED` and automatically wakes both cloud subsystems simultaneously:
 >
-> - **🗣️ Sinric Pro / Google Home Integration**:
->   - WebSocket connection automatically re-establishes with `ws.sinric.pro`.
->   - Google Assistant integration is instantly ready for voice inquiries (*"Hey Google, what is the water level?"*).
+> 1. **🟢 Blynk IoT Cloud Synchronization**:
+>    - Device status automatically flips to **`ONLINE`** on the Blynk mobile app & web dashboard.
+>    - Virtual pins `V0`–`V4` immediately update with the real-time water percentage and probe states.
+>    - **Spam Suppression**: The initial connection sync suppresses phone push notifications to prevent false alarm alerts when power returns.
+>
+> 2. **🗣️ Sinric Pro / Google Home Integration**:
+>    - Secure WebSocket connection (`WSS`) automatically re-establishes with `ws.sinric.pro`.
+>    - Performs cryptographic HMAC authentication and syncs live tank level with Google Cloud.
+>    - Google Assistant integration is instantly ready for voice inquiries (*"Hey Google, what is the water level?"*).
+>
+> 3. **🛡️ Parallel TLS Handshake Safety (`g_tls_handshake_mutex`)**:
+>    - Initializing HTTPS and WSS connections at the same time requires significant RAM. The firmware uses a hardware TLS Mutex to safely serialize the encryption handshakes, preventing heap fragmentation and ensuring zero crashes.
+>
+> ---
+>
+> ### 💡 **100% Offline Independence (No Wi-Fi Needed for Core Functions):**
+> Even if your home Wi-Fi router is completely powered off or internet goes down:
+> - Water level sensing (20%, 60%, 100%) continues unaffected.
+> - MAX98357A bilingual voice announcements (**English + Telugu**) play locally at the tank with 100% reliability.
+> - As soon as Wi-Fi returns, cloud synchronization resumes instantly with zero user action required.
 
 ---
 
