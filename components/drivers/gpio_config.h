@@ -8,7 +8,7 @@
  *  Common Probe → GND (fixed reference, 3 cm height)
  *  Low Probe    → GPIO10 (20 cm)
  *  Medium Probe → GPIO11 (55 cm)
- *  Full Probe   → GPIO23 (90 cm)
+ *  Full Probe   → GPIO22 (90 cm)
  *
  * Sensor Logic
  * ─────────────
@@ -48,11 +48,7 @@ extern "C" {
 #endif
 
 /** GPIO connected to the Full water level probe (90 cm from tank base). */
-#ifdef CONFIG_WATER_PROBE_FULL_GPIO
-#define SENSOR_GPIO_FULL    ((gpio_num_t)CONFIG_WATER_PROBE_FULL_GPIO)
-#else
 #define SENSOR_GPIO_FULL    GPIO_NUM_22
-#endif
 
 /* =========================================================================
  * I2S GPIO Pin Definitions (MAX98357A)
@@ -86,7 +82,7 @@ extern "C" {
 /**
  * @brief Initialize all water sensor GPIO pins.
  *
- * Configures GPIO10, GPIO11, and GPIO23 as:
+ * Configures GPIO10, GPIO11, and GPIO22 as:
  *  - Direction : INPUT
  *  - Pull-up   : ENABLED  (line is HIGH when probe is dry)
  *  - Pull-down : DISABLED

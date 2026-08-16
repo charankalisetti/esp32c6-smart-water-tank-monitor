@@ -76,7 +76,7 @@ esp_err_t gpio_sensors_init(void)
         TAG, "Failed to configure MEDIUM sensor GPIO%d", SENSOR_GPIO_MEDIUM
     );
 
-    /* Configure Full probe (GPIO23) */
+    /* Configure Full probe (GPIO22) */
     ESP_RETURN_ON_ERROR(
         configure_sensor_pin(SENSOR_GPIO_FULL),
         TAG, "Failed to configure FULL sensor GPIO%d", SENSOR_GPIO_FULL

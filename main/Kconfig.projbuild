@@ -14,9 +14,9 @@ menu "Water Tank Monitor Configuration"
 
     config WATER_PROBE_FULL_GPIO
         int "Full Level Sensor Probe GPIO"
-        default 23
+        default 22
         help
-            GPIO pin connected to the full level water sensor probe (default: GPIO23).
+            GPIO pin connected to the full level water sensor probe (default: GPIO22).
 
     config AUDIO_MAX98357A_BCLK_GPIO
         int "MAX98357A I2S BCLK (Bit Clock) GPIO"
