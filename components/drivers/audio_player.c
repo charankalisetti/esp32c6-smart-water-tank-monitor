@@ -35,6 +35,21 @@
 #include "audio/water_medium_te.h"
 #include "audio/tank_full_te.h"
 
+/* Extern declarations for diagnostic fault audio clips */
+extern const int16_t fault_probe_low_pcm[];
+extern const size_t  fault_probe_low_pcm_len;
+extern const int16_t fault_probe_med_pcm[];
+extern const size_t  fault_probe_med_pcm_len;
+extern const int16_t fault_probe_general_pcm[];
+extern const size_t  fault_probe_general_pcm_len;
+
+extern const int16_t fault_probe_low_te_pcm[];
+extern const size_t  fault_probe_low_te_pcm_len;
+extern const int16_t fault_probe_med_te_pcm[];
+extern const size_t  fault_probe_med_te_pcm_len;
+extern const int16_t fault_probe_general_te_pcm[];
+extern const size_t  fault_probe_general_te_pcm_len;
+
 #include <string.h>
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
@@ -66,16 +81,22 @@ static bool s_initialized = false;
 typedef struct {
     water_level_t   level;
     const int16_t  *pcm_en;
+    const size_t   *len_en;
     const char     *label_en;
     const int16_t  *pcm_te;
+    const size_t   *len_te;
     const char     *label_te;
+    int             repeat_count;
 } clip_entry_t;
 
 static const clip_entry_t CLIP_TABLE[] = {
-    { WATER_LEVEL_EMPTY,   tank_empty_pcm,   "Tank Empty",                    tank_empty_te_pcm,   "ట్యాంక్ ఖాళీగా ఉంది"                    },
-    { WATER_LEVEL_LOW,     water_low_pcm,    "Water Level Low",               water_low_te_pcm,    "నీటి మట్టం తక్కువగా ఉంది"               },
-    { WATER_LEVEL_MEDIUM,  water_medium_pcm, "Water Level Sixty One Percent", water_medium_te_pcm, "నీటి మట్టం అరవై ఒక్క శాతం ఉంది" },
-    { WATER_LEVEL_FULL,    tank_full_pcm,    "Tank Full",                     tank_full_te_pcm,    "ట్యాంక్ నిండిపోయింది"                     },
+    { WATER_LEVEL_EMPTY,         tank_empty_pcm,          &tank_empty_pcm_len,          "Tank Empty",                                                                                          tank_empty_te_pcm,          &tank_empty_te_pcm_len,          "ట్యాంక్ ఖాళీగా ఉంది",                    5 },
+    { WATER_LEVEL_LOW,           water_low_pcm,           &water_low_pcm_len,           "Water Level Low",                                                                                     water_low_te_pcm,           &water_low_te_pcm_len,           "నీటి మట్టం తక్కువగా ఉంది",               2 },
+    { WATER_LEVEL_MEDIUM,        water_medium_pcm,        &water_medium_pcm_len,        "Water Level Sixty One Percent",                                                                       water_medium_te_pcm,        &water_medium_te_pcm_len,        "నీటి మట్టం అరవై ఒక్క శాతం ఉంది", 3 },
+    { WATER_LEVEL_FULL,          tank_full_pcm,           &tank_full_pcm_len,           "Tank Full",                                                                                           tank_full_te_pcm,           &tank_full_te_pcm_len,           "ట్యాంక్ నిండిపోయింది",                     5 },
+    { WATER_LEVEL_FAULT_LOW,     fault_probe_low_pcm,     &fault_probe_low_pcm_len,     "Warning: Low water sensor probe 20 centimeter fault. Wire is disconnected or corroded. Please check probe one.", fault_probe_low_te_pcm,     &fault_probe_low_te_pcm_len,     "హెచ్చరిక: 20సెం.మీ దిగువ సెన్సార్ లోపం", 3 },
+    { WATER_LEVEL_FAULT_MED,     fault_probe_med_pcm,     &fault_probe_med_pcm_len,     "Warning: Medium water sensor probe 55 centimeter fault. Wire is disconnected or corroded. Please check probe two.", fault_probe_med_te_pcm,     &fault_probe_med_te_pcm_len,     "హెచ్చరిక: 55సెం.మీ మధ్య సెన్సార్ లోపం",  3 },
+    { WATER_LEVEL_FAULT_GENERAL, fault_probe_general_pcm, &fault_probe_general_pcm_len, "Warning: Water sensor wiring fault. Please check sensor probes.",                                     fault_probe_general_te_pcm, &fault_probe_general_te_pcm_len, "హెచ్చరిక: వైరింగ్ లోపం",               3 },
 };
 
 /* =========================================================================
@@ -263,28 +284,13 @@ static void audio_player_task(void *pvParameters)
             continue;
         }
 
-        /* Determine lengths and repetition counts based on level spec */
-        size_t len_en = 0, len_te = 0;
-        int repeat_count = 1;
-        if (event.level == WATER_LEVEL_EMPTY) {
-            len_en = tank_empty_pcm_len;
-            len_te = tank_empty_te_pcm_len;
-            repeat_count = 5;
-        } else if (event.level == WATER_LEVEL_LOW) {
-            len_en = water_low_pcm_len;
-            len_te = water_low_te_pcm_len;
-            repeat_count = 2;
-        } else if (event.level == WATER_LEVEL_MEDIUM) {
-            len_en = water_medium_pcm_len;
-            len_te = water_medium_te_pcm_len;
-            repeat_count = 3;
-        } else if (event.level == WATER_LEVEL_FULL) {
-            len_en = tank_full_pcm_len;
-            len_te = tank_full_te_pcm_len;
-            repeat_count = 5;
-        }
+        /* Determine lengths and repetition counts from clip table */
+        size_t len_en = (clip->len_en != NULL) ? *clip->len_en : 0;
+        size_t len_te = (clip->len_te != NULL) ? *clip->len_te : 0;
+        int repeat_count = clip->repeat_count;
 
-        ESP_LOGI(TAG, "Bilingual announcement triggered for level %d (repeating %d times)", (int)event.level, repeat_count);
+        ESP_LOGI(TAG, "Bilingual announcement triggered for level %d (%s) (repeating %d times)",
+                 (int)event.level, clip->label_en, repeat_count);
 
         /* Mark audio as in-progress */
         xEventGroupSetBits(g_system_event_group, EVT_AUDIO_PLAYING);

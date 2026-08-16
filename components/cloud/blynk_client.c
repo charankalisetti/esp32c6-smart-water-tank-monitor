@@ -39,11 +39,14 @@ typedef struct {
 } blynk_level_info_t;
 
 static const blynk_level_info_t k_level_info[] = {
-    /* WATER_LEVEL_EMPTY   */ { "Tank Empty",        0,   0, 0, 0 },
-    /* WATER_LEVEL_LOW     */ { "Water Level Low",  22,   1, 0, 0 },
-    /* WATER_LEVEL_MEDIUM  */ { "Water Level 61%",  61,   1, 1, 0 },
-    /* WATER_LEVEL_FULL    */ { "Tank Full",        100,  1, 1, 1 },
-    /* WATER_LEVEL_INVALID */ { "Sensor Fault",      0,   0, 0, 0 },
+    /* WATER_LEVEL_EMPTY          = 0 */ { "Tank Empty",                   0,   0, 0, 0 },
+    /* WATER_LEVEL_LOW            = 1 */ { "Water Level Low",             22,   1, 0, 0 },
+    /* WATER_LEVEL_MEDIUM         = 2 */ { "Water Level 61%",             61,   1, 1, 0 },
+    /* WATER_LEVEL_FULL           = 3 */ { "Tank Full",                  100,   1, 1, 1 },
+    /* WATER_LEVEL_FAULT_LOW      = 4 */ { "FAULT: Low Probe (GPIO10)",    0,   0, 1, 0 },
+    /* WATER_LEVEL_FAULT_MED      = 5 */ { "FAULT: Med Probe (GPIO11)",   22,   1, 0, 1 },
+    /* WATER_LEVEL_FAULT_GENERAL  = 6 */ { "FAULT: Sensor Wiring",         0,   0, 0, 1 },
+    /* WATER_LEVEL_INVALID        = 7 */ { "Sensor Fault",                 0,   0, 0, 0 },
 };
 #define LEVEL_INFO_COUNT  (sizeof(k_level_info) / sizeof(k_level_info[0]))
 

@@ -111,11 +111,14 @@ static const char k_sinric_ca_pem[] =
 /* ----------------------------------------------------------------------- */
 typedef struct { water_level_t level; int percent; } sinric_level_t;
 static const sinric_level_t k_lvl[] = {
-    { WATER_LEVEL_EMPTY,   0   },
-    { WATER_LEVEL_LOW,    22   },
-    { WATER_LEVEL_MEDIUM, 61   },
-    { WATER_LEVEL_FULL,  100   },
-    { WATER_LEVEL_INVALID, 0   },
+    /* WATER_LEVEL_EMPTY          = 0 */ { WATER_LEVEL_EMPTY,          0   },
+    /* WATER_LEVEL_LOW            = 1 */ { WATER_LEVEL_LOW,           22   },
+    /* WATER_LEVEL_MEDIUM         = 2 */ { WATER_LEVEL_MEDIUM,        61   },
+    /* WATER_LEVEL_FULL           = 3 */ { WATER_LEVEL_FULL,         100   },
+    /* WATER_LEVEL_FAULT_LOW      = 4 */ { WATER_LEVEL_FAULT_LOW,      0   },
+    /* WATER_LEVEL_FAULT_MED      = 5 */ { WATER_LEVEL_FAULT_MED,     22   },
+    /* WATER_LEVEL_FAULT_GENERAL  = 6 */ { WATER_LEVEL_FAULT_GENERAL,  0   },
+    /* WATER_LEVEL_INVALID        = 7 */ { WATER_LEVEL_INVALID,        0   },
 };
 
 /* ----------------------------------------------------------------------- */

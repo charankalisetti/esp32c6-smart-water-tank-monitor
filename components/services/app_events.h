@@ -25,11 +25,14 @@ extern "C" {
 #endif
 
 typedef enum {
-    WATER_LEVEL_EMPTY   = 0,  /**< All sensors dry:          GPIO10 H, GPIO11 H, GPIO23 H */
-    WATER_LEVEL_LOW     = 1,  /**< Low sensor wet only:      GPIO10 L, GPIO11 H, GPIO23 H */
-    WATER_LEVEL_MEDIUM  = 2,  /**< Low+medium wet:           GPIO10 L, GPIO11 L, GPIO23 H */
-    WATER_LEVEL_FULL    = 3,  /**< All three sensors wet:    GPIO10 L, GPIO11 L, GPIO23 L */
-    WATER_LEVEL_INVALID = 4,  /**< Impossible sensor combination — hardware fault */
+    WATER_LEVEL_EMPTY          = 0,  /**< All sensors dry:          GPIO10 H, GPIO11 H, GPIO22 H */
+    WATER_LEVEL_LOW            = 1,  /**< Low sensor wet only:      GPIO10 L, GPIO11 H, GPIO22 H */
+    WATER_LEVEL_MEDIUM         = 2,  /**< Low+medium wet:           GPIO10 L, GPIO11 L, GPIO22 H */
+    WATER_LEVEL_FULL           = 3,  /**< All three sensors wet:    GPIO10 L, GPIO11 L, GPIO22 L */
+    WATER_LEVEL_FAULT_LOW      = 4,  /**< Low probe (GPIO10, 20cm) open-circuit / corroded */
+    WATER_LEVEL_FAULT_MED      = 5,  /**< Med probe (GPIO11, 55cm) open-circuit / corroded */
+    WATER_LEVEL_FAULT_GENERAL  = 6,  /**< Multiple probe open or Full probe shorted to GND */
+    WATER_LEVEL_INVALID        = 7,  /**< Unclassified hardware anomaly */
 } water_level_t;
 
 typedef struct {

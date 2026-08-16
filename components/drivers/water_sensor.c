@@ -60,10 +60,14 @@ typedef struct {
 } sensor_map_entry_t;
 
 static const sensor_map_entry_t SENSOR_MAP[] = {
-    { 0b111, WATER_LEVEL_EMPTY  },  /* All dry   → 0%  */
-    { 0b110, WATER_LEVEL_LOW    },  /* Low wet   → 22% */
-    { 0b100, WATER_LEVEL_MEDIUM },  /* Low+Med   → 61% */
-    { 0b000, WATER_LEVEL_FULL   },  /* All wet   → 100%*/
+    { 0b111, WATER_LEVEL_EMPTY          },  /* All dry                     → 0%   */
+    { 0b110, WATER_LEVEL_LOW            },  /* Low wet                     → 22%  */
+    { 0b100, WATER_LEVEL_MEDIUM         },  /* Low+Med wet                 → 61%  */
+    { 0b000, WATER_LEVEL_FULL           },  /* Low+Med+Full wet            → 100% */
+    { 0b101, WATER_LEVEL_FAULT_LOW      },  /* Med wet, Low dry            → GPIO10 open/corroded */
+    { 0b001, WATER_LEVEL_FAULT_LOW      },  /* Med+Full wet, Low dry       → GPIO10 open/corroded */
+    { 0b010, WATER_LEVEL_FAULT_MED      },  /* Low+Full wet, Med dry       → GPIO11 open/corroded */
+    { 0b011, WATER_LEVEL_FAULT_GENERAL  },  /* Full wet, Low+Med dry       → GPIO22 short / Multi */
 };
 
 #define SENSOR_MAP_SIZE  (sizeof(SENSOR_MAP) / sizeof(SENSOR_MAP[0]))
@@ -138,12 +142,15 @@ static water_level_t bitmask_to_level(uint8_t bitmask)
 static const char *level_to_string(water_level_t level)
 {
     switch (level) {
-        case WATER_LEVEL_EMPTY:   return "Empty (0%)";
-        case WATER_LEVEL_LOW:     return "Low (~22%)";
-        case WATER_LEVEL_MEDIUM:  return "Medium (~61%)";
-        case WATER_LEVEL_FULL:    return "Full (100%)";
-        case WATER_LEVEL_INVALID: return "SENSOR FAULT";
-        default:                  return "Unknown";
+        case WATER_LEVEL_EMPTY:          return "Empty (0%)";
+        case WATER_LEVEL_LOW:            return "Low (~22%)";
+        case WATER_LEVEL_MEDIUM:         return "Medium (~61%)";
+        case WATER_LEVEL_FULL:           return "Full (100%)";
+        case WATER_LEVEL_FAULT_LOW:      return "FAULT: Low Probe (GPIO10, 20cm) Open/Corroded";
+        case WATER_LEVEL_FAULT_MED:      return "FAULT: Med Probe (GPIO11, 55cm) Open/Corroded";
+        case WATER_LEVEL_FAULT_GENERAL:  return "FAULT: Sensor Wiring / GPIO22 Short";
+        case WATER_LEVEL_INVALID:        return "SENSOR FAULT: Unclassified";
+        default:                         return "Unknown";
     }
 }
 
@@ -166,15 +173,21 @@ static void print_level_report(uint8_t bitmask, water_level_t level)
 
     switch (level) {
         case WATER_LEVEL_EMPTY:
-            level_name = "Empty";   pct = "0%";   break;
+            level_name = "Empty";                                pct = "0%";   break;
         case WATER_LEVEL_LOW:
-            level_name = "Low";     pct = "~22%";  break;
+            level_name = "Low";                                  pct = "~22%"; break;
         case WATER_LEVEL_MEDIUM:
-            level_name = "Medium";  pct = "~61%";  break;
+            level_name = "Medium";                               pct = "~61%"; break;
         case WATER_LEVEL_FULL:
-            level_name = "Full";    pct = "100%";  break;
+            level_name = "Full";                                 pct = "100%"; break;
+        case WATER_LEVEL_FAULT_LOW:
+            level_name = "FAULT: Low Probe (GPIO10) Corroded";   pct = "ERR";  break;
+        case WATER_LEVEL_FAULT_MED:
+            level_name = "FAULT: Med Probe (GPIO11) Corroded";   pct = "ERR";  break;
+        case WATER_LEVEL_FAULT_GENERAL:
+            level_name = "FAULT: Sensor Wiring / GPIO22 Short";  pct = "ERR";  break;
         default:
-            level_name = "FAULT";   pct = "N/A";   break;
+            level_name = "FAULT: Unclassified";                  pct = "N/A";  break;
     }
 
     /* Print the structured block as specified */
@@ -233,7 +246,6 @@ static void water_sensor_task(void *pvParameters)
     water_level_t confirmed_level  = WATER_LEVEL_INVALID; /* Force initial publish */
     water_level_t candidate_level  = WATER_LEVEL_INVALID;
     uint8_t       debounce_counter = 0;
-    uint8_t       last_bitmask     = 0xFF;                /* Sentinel: impossible */
 
     while (1) {
         /* Reset Task Watchdog Timer on every poll cycle */
@@ -243,42 +255,8 @@ static void water_sensor_task(void *pvParameters)
         uint8_t bitmask = sample_gpio_bitmask();
         water_level_t raw_level = bitmask_to_level(bitmask);
 
-        /* --- Handle invalid sensor state --------------------------------- */
-        if (raw_level == WATER_LEVEL_INVALID) {
-            /* Only log the fault message once per invalid event, not every poll */
-            if (bitmask != last_bitmask) {
-                ESP_LOGW(TAG,
-                    "SENSOR FAULT — impossible GPIO combination detected "
-                    "(GPIO10=%s GPIO11=%s GPIO22=%s bitmask=0b%03u). "
-                    "Check probe wiring.",
-                    (bitmask & 0b001) ? "HIGH" : "LOW",
-                    (bitmask & 0b010) ? "HIGH" : "LOW",
-                    (bitmask & 0b100) ? "HIGH" : "LOW",
-                    bitmask);
-                xEventGroupSetBits(g_system_event_group, EVT_SENSOR_FAULT);
-                last_bitmask = bitmask;
-            }
-            /* Log GPIO state every 10 seconds (2 polls × 5s) for live debug */
-            static uint32_t fault_log_count = 0;
-            fault_log_count++;
-            if (fault_log_count >= 2) {
-                fault_log_count = 0;
-                ESP_LOGI(TAG, "[DEBUG] GPIO10=%s GPIO11=%s GPIO22=%s bitmask=0b%03u Level=FAULT",
-                    (bitmask & 0b001) ? "HIGH/DRY" : "LOW/WET",
-                    (bitmask & 0b010) ? "HIGH/DRY" : "LOW/WET",
-                    (bitmask & 0b100) ? "HIGH/DRY" : "LOW/WET",
-                    bitmask);
-            }
-            /* Reset debounce so we don't carry stale candidate state */
-            debounce_counter = 0;
-            candidate_level  = WATER_LEVEL_INVALID;
-            vTaskDelay(pdMS_TO_TICKS(WATER_SENSOR_POLL_MS));
-            continue;
-        }
-
-        /* --- Log valid GPIO state every 2 seconds for live debug ----------- */
+        /* --- Periodic debug log every 10 seconds ------------------------ */
         {
-            /* Log valid GPIO state every 10 seconds (2 polls × 5s) */
             static uint32_t dbg_log_count = 0;
             dbg_log_count++;
             if (dbg_log_count >= 2) {
@@ -298,25 +276,32 @@ static void water_sensor_task(void *pvParameters)
         if (raw_level == candidate_level) {
             debounce_counter++;
         } else {
-            /* New candidate — restart counter */
+            /* New candidate level (or fault) — restart debounce counter */
             candidate_level  = raw_level;
             debounce_counter = 1;
         }
 
-        /* --- Confirm level after debounce threshold ---------------------- */
+        /* --- Confirm level after debounce threshold (15 seconds) -------- */
         if (debounce_counter >= WATER_SENSOR_DEBOUNCE_COUNT) {
             debounce_counter = 0; /* Reset so we don't keep re-triggering */
 
             if (candidate_level != confirmed_level) {
-                /* Level has genuinely changed — update tracking state */
+                /* Level or fault has genuinely changed — update tracking state */
                 confirmed_level = candidate_level;
-                last_bitmask    = bitmask;
 
                 /* Update shared snapshot (read by blynk_task on connect) */
                 g_current_level = confirmed_level;
 
-                ESP_LOGI(TAG, "Water level changed -> %s (bitmask=0b%03u)",
-                         level_to_string(confirmed_level), bitmask);
+                /* Update system event group fault status */
+                if (confirmed_level >= WATER_LEVEL_FAULT_LOW) {
+                    xEventGroupSetBits(g_system_event_group, EVT_SENSOR_FAULT);
+                    ESP_LOGW(TAG, "SENSOR FAULT DETECTED -> %s (bitmask=0b%03u)",
+                             level_to_string(confirmed_level), bitmask);
+                } else {
+                    xEventGroupClearBits(g_system_event_group, EVT_SENSOR_FAULT);
+                    ESP_LOGI(TAG, "Water level changed -> %s (bitmask=0b%03u)",
+                             level_to_string(confirmed_level), bitmask);
+                }
 
                 /* Print structured serial report */
                 print_level_report(bitmask, confirmed_level);

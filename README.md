@@ -57,6 +57,23 @@ Pull-up State:  █                                █
 
 ---
 
+## 🔬 Automated Probe Electrolysis & Fault Diagnostics
+
+When a probe wire suffers from electrolysis corrosion, mineral crust insulation, or physical detachment, it creates an **impossible geometric combination** (e.g. `GPIO10=HIGH/DRY` while `GPIO11=LOW/WET` or `GPIO22=LOW/WET`).
+
+The firmware includes an **Automated Hardware Diagnostic Engine** that analyzes the 3-bit bitmask, pinpoints the exact faulty probe, and announces specific bilingual voice warnings through the MAX98357A speaker:
+
+| Bitmask (bin) | GPIO 10 (Low) | GPIO 11 (Med) | GPIO 22 (Full) | Diagnosis | Spoken Voice Announcement |
+|---|---|---|---|---|---|
+| `0b101` / `0b001` | **HIGH (Dry)** | **LOW (Wet)** | Any | 🚨 **Low Probe (GPIO 10) Open/Corroded** | *"Warning: Low water sensor probe 20 centimeter fault. Wire is disconnected or corroded. Please check probe one."* <br> *"హెచ్చరిక: 20 సెంటీమీటర్ల దిగువ నీటి సెన్సార్ పనిచేయడం లేదు. దయచేసి మొదటి వైరును తనిఖీ చేయండి."* |
+| `0b010` | LOW (Wet) | **HIGH (Dry)** | **LOW (Wet)** | 🚨 **Med Probe (GPIO 11) Open/Corroded** | *"Warning: Medium water sensor probe 55 centimeter fault. Wire is disconnected or corroded. Please check probe two."* <br> *"హెచ్చరిక: 55 సెంటీమీటర్ల మధ్య నీటి సెన్సార్ పనిచేయడం లేదు. దయచేసి రెండవ వైరును తనిఖీ చేయండి."* |
+| `0b011` | **HIGH (Dry)** | **HIGH (Dry)** | **LOW (Wet)** | 🚨 **GPIO 22 Short to GND / Multi-Probe Break** | *"Warning: Water sensor wiring fault. Please check sensor probes."* <br> *"హెచ్చరిక: వాటర్ సెన్సార్ వైరింగ్ లోపం. దయచేసి కనెక్షన్లను తనిఖీ చేయండి."* |
+
+- **15-Second Splash Debounce**: Requires 3 consecutive 5-second samples before triggering, preventing water ripple false alarms.
+- **Blynk IoT Alert**: Changes status label to `FAULT: Low Probe (GPIO10)` and sends an urgent hardware alert push notification.
+
+---
+
 ## 🔄 Power Outage & Autonomous Auto-Recovery
 
 The system is designed with **100% autonomous recovery**. If power is lost for any duration (e.g., 5 minutes or hours):
