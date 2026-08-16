@@ -13,6 +13,7 @@ An enterprise-grade, ultra-reliable IoT firmware designed for the **ESP32-C6 Dev
   - **Blynk IoT REST API**: Real-time water percentage, probe state indicators (`V0`–`V4`), and smart push notification filtering.
   - **Sinric Pro / Google Assistant**: WebSocket interface for native voice queries (*"Hey Google, what is the water level?"*).
 - 📶 **Dual-Router Auto-Failover**: Automatically reconnects and switches between Primary (`railwirefibernet`) and Secondary (`BSNL Fiber`) with exponential backoff and jitter.
+- ⚡ **Autonomous Power-Loss Recovery**: 100% automatic recovery after blackouts with NVS Flash persistence, router reboot delay tolerance, and instant level announcement.
 - 🛡️ **Industrial Reliability**: Task Watchdog Timer (TWDT) with 15s panic reset, TLS Handshake Mutex for heap safety, and memory sanitization.
 
 ---
@@ -53,6 +54,39 @@ Pull-up State:  █                                █
 1. **Floating by Default**: GPIO pull-ups are completely disabled between reads.
 2. **2ms Pulse**: Every 5 seconds, pull-ups activate for only 2 milliseconds to take a reading, then immediately shut off.
 3. **99.96% Powerless**: Current duty cycle is reduced to **0.04%**, extending probe lifespan by **2,500x**.
+
+---
+
+## 🔄 Power Outage & Autonomous Auto-Recovery
+
+The system is designed with **100% autonomous recovery**. If power is lost for any duration (e.g., 5 minutes or hours):
+
+```mermaid
+sequenceDiagram
+    autonumber
+    actor Power as ⚡ Power Cut (5 min)
+    participant ESP as ESP32-C6 Controller
+    participant Sensor as Water Probes
+    participant Speaker as MAX98357A Speaker
+    participant Router as Wi-Fi Router
+    participant Cloud as Blynk / Google Home
+
+    Note over Power,Cloud: 🔴 Power goes OFF (All settings safely stored in NVS Flash)
+    Power->>ESP: 🟢 Power RESTORED
+    ESP->>ESP: Bootloader runs (<1s) & loads credentials from NVS Flash
+    ESP->>Sensor: Probe task begins pulsed sampling
+    Sensor->>Sensor: Samples 3 times (15s debounce) to confirm current level
+    Sensor->>Speaker: 🔊 Plays current water level (English + Telugu)
+    Router-->>ESP: Router reboots & assigns IP address
+    ESP->>Cloud: Auto-connects to Blynk Cloud & Sinric Pro
+    Cloud->>Cloud: Device status flips to 🟢 ONLINE with live telemetry
+```
+
+### Auto-Recovery Timeline:
+1. **0–1 Seconds**: Bootloader starts, loads Wi-Fi credentials from Non-Volatile Flash (NVS), initializes I2S audio driver, FreeRTOS multi-queues, and Task Watchdog Timer.
+2. **15 Seconds**: Sensor probes complete 3-sample debounce (5s × 3) and confirm the exact tank water level.
+3. **Voice Announcement**: Speaker immediately announces the current level (*"Water Level Sixty One Percent"* / *"నీటి మట్టం అరవై ఒక్క శాతం ఉంది"*).
+4. **Cloud Auto-Sync**: If the Wi-Fi router takes 1–2 minutes to reboot, `wifi_manager` uses exponential backoff to reconnect automatically. Once online, Blynk and Google Home update without triggering spam push alerts.
 
 ---
 
@@ -141,3 +175,4 @@ pio device monitor --port COM6 --baud 115200 --filter time
 2. **TLS Handshake Mutex**: Serializes HTTPS/WSS handshakes to prevent FreeRTOS heap fragmentation.
 3. **Smart Notification Throttling**: Restricts Blynk push notifications to true physical transitions, keeping 15-second heartbeats silent.
 4. **Normalized Audio Output**: Audio samples scaled to 90% peak scale (+6 dB loudness boost) without digital clipping.
+5. **NVS Non-Volatile Persistence**: Wi-Fi credentials, tokens, and configs survive indefinite power outages.
