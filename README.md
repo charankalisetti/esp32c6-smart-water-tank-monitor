@@ -138,32 +138,144 @@ sequenceDiagram
 
 ---
 
-## 🏗️ Architecture & Component Layout
+## 🏗️ Project Directory Structure & File Guide
+
+Below is the complete architectural layout of the project, followed by a beginner-friendly explanation of what every single folder and file does.
 
 ```text
 esp32c6_max98357a_sine/
-├── CMakeLists.txt              # Root build configuration
-├── generate_audio_clips.py     # Google TTS to 16kHz PCM array generator
-├── main/
-│   ├── CMakeLists.txt
-│   ├── Kconfig.projbuild       # idf.py menuconfig pin options
-│   └── app_main.c / .h         # Subsystem lifecycle orchestrator
-├── components/
-│   ├── drivers/                # Hardware Abstraction Layer
-│   │   ├── water_sensor.c/h    # Anti-corrosion pulsed polling & debounce (GPIO 10, 11, 22)
-│   │   ├── audio_player.c/h    # MAX98357A I2S driver (GPIO 18, 19, 20)
-│   │   ├── gpio_config.c/h     # Pinout configuration (floating init)
-│   │   └── audio/              # PCM Telugu & English voice arrays
-│   ├── cloud/                  # Network & Cloud Integrations
-│   │   ├── wifi_manager.c/h    # Dual-router failover + exponential backoff
-│   │   ├── wifi_prov.c/h       # Secure NVS credential manager
-│   │   ├── blynk_client.c/h    # Blynk IoT REST client (V0-V4)
-│   │   └── sinric_client.c/h   # Sinric Pro WebSocket client (Google Home)
-│   └── services/               # System Services & Telemetry
-│       ├── app_events.c/h      # Multi-queue broker, event groups, TLS mutex
-│       ├── night_sleep.c/h     # Night sleep power manager (IST)
-│       └── sys_diagnostics.c/h # Health metrics monitor (Heap, RSSI, Uptime)
+├── platformio.ini                  # PlatformIO target, flash, and upload configuration
+├── partitions.csv                  # 6 MB Flash partition table definition
+├── CMakeLists.txt                  # Root ESP-IDF project build script
+├── generate_audio_clips.py         # Google TTS to 16 kHz PCM audio generator script
+├── sdkconfig.defaults              # Default baseline ESP-IDF settings
+├── main/                           # Application entry & lifecycle orchestrator
+│   ├── CMakeLists.txt              # Build rules for the main component
+│   ├── Kconfig.projbuild           # Menuconfig pin and hardware configuration options
+│   ├── app_main.c                  # Master firmware orchestrator & task launcher
+│   ├── app_main.h                  # Header for main orchestration lifecycle
+│   ├── main.c                      # Standard ESP-IDF entry wrapper
+│   └── sinric_ca.pem               # Root CA certificate for Google Home WSS validation
+└── components/                     # Modular firmware subsystem components
+    ├── drivers/                    # Hardware Abstraction Layer (HAL)
+    │   ├── CMakeLists.txt          # Drivers component build rules
+    │   ├── gpio_config.c / .h      # Probe pin configuration (anti-corrosion floating init)
+    │   ├── water_sensor.c / .h     # 10s pulsed strobe sensing, bitmask logic & debounce
+    │   ├── audio_player.c / .h     # MAX98357A I2S driver (+6 dB gain, bilingual queue player)
+    │   └── audio/                  # Raw PCM voice data arrays
+    │       ├── audio_clips.c       # Master 16 kHz 16-bit PCM voice clips (EN + TE + Faults)
+    │       ├── tank_empty.h        # English: "Tank Empty" array definition
+    │       ├── water_low.h         # English: "Water Level Low" array definition
+    │       ├── water_medium.h      # English: "Water Level Sixty One Percent" array definition
+    │       ├── tank_full.h         # English: "Tank Full" array definition
+    │       ├── tank_empty_te.c/.h  # Telugu: "ట్యాంక్ ఖాళీగా ఉంది" array definition
+    │       ├── water_low_te.c/.h   # Telugu: "నీటి మట్టం తక్కువగా ఉంది" array definition
+    │       ├── water_medium_te.c/.h# Telugu: "నీటి మట్టం అరవై ఒక్క శాతం ఉంది" array definition
+    │       └── tank_full_te.c/.h   # Telugu: "ట్యాంక్ నిండిపోయింది" array definition
+    ├── cloud/                      # Network, Cloud & Voice Assistant Integrations
+    │   ├── CMakeLists.txt          # Cloud component build rules
+    │   ├── wifi_config.h           # Wi-Fi SSIDs, passwords, Blynk tokens, and Sinric keys
+    │   ├── wifi_manager.c / .h     # Dual-router auto-failover with exponential backoff
+    │   ├── wifi_prov.c / .h        # Encrypted NVS Flash Wi-Fi credential storage
+    │   ├── blynk_client.c / .h     # Blynk IoT REST API client (V0–V4 virtual pins)
+    │   └── sinric_client.c / .h    # Sinric Pro WebSocket client for Google Home voice queries
+    └── services/                   # FreeRTOS IPC, Power Management & Telemetry
+        ├── CMakeLists.txt          # Services component build rules
+        ├── app_events.c / .h       # Dedicated FreeRTOS queue broker & TLS mutex
+        ├── sys_diagnostics.c / .h  # Real-time health monitor (Heap RAM, RSSI, Uptime)
+        └── night_sleep.c / .h      # Nighttime power manager (IST timezone)
 ```
+
+---
+
+### 📂 1. Root Directory (`/`)
+
+* **[`platformio.ini`](file:///c:/Users/chara/.gemini/antigravity-ide/scratch/esp32c6_max98357a_sine/platformio.ini)**:
+  The master build file for PlatformIO. Specifies the target chip (`ESP32-C6`), framework (`ESP-IDF v6.0.1`), serial monitor port and baud rate (`COM6` @ `115200`), upload speed (`460800`), 8 MB Flash size, and links the custom partition table (`partitions.csv`).
+* **[`partitions.csv`](file:///c:/Users/chara/.gemini/antigravity-ide/scratch/esp32c6_max98357a_sine/partitions.csv)**:
+  The Flash Memory Map for the ESP32-C6's 8 MB flash chip. Allocates **6 MB (`0x600000`)** for the main firmware application (`factory`) to comfortably fit the bilingual voice clips, 24 KB for Non-Volatile Storage (`nvs`), and 4 KB for RF Wi-Fi calibration (`phy_init`).
+* **[`CMakeLists.txt`](file:///c:/Users/chara/.gemini/antigravity-ide/scratch/esp32c6_max98357a_sine/CMakeLists.txt)**:
+  The root CMake build configuration that registers the ESP-IDF project (`esp32c6_water_monitor`) and imports all modular components.
+* **[`generate_audio_clips.py`](file:///c:/Users/chara/.gemini/antigravity-ide/scratch/esp32c6_max98357a_sine/generate_audio_clips.py)**:
+  A Python utility tool that uses Google Text-to-Speech (`gTTS`) and `ffmpeg` to generate real human voice clips in **English** and **Telugu**, converts them to 16 kHz 16-bit Mono raw PCM format, normalizes volume to +6 dB, and exports them directly into C arrays in `audio_clips.c`.
+* **[`sdkconfig.defaults`](file:///c:/Users/chara/.gemini/antigravity-ide/scratch/esp32c6_max98357a_sine/sdkconfig.defaults)**:
+  Defines project-wide ESP-IDF default options, such as enabling Mozilla SSL certificate bundles, configuring FreeRTOS tick rates, and setting stack sizes.
+
+---
+
+### 📂 2. `main/` — Application Lifecycle & Orchestration
+
+* **[`main/app_main.c`](file:///c:/Users/chara/.gemini/antigravity-ide/scratch/esp32c6_max98357a_sine/main/app_main.c)**:
+  The central nervous system of the firmware. It initializes the Task Watchdog Timer (15s timeout), sets up FreeRTOS inter-task communication queues, configures system event groups, and starts all background worker tasks (`water_sensor_task`, `audio_player_task`, `blynk_task`, `sinric_task`, `sys_diagnostics_task`). Once boot completes, it deletes itself to reclaim heap memory.
+* **[`main/app_main.h`](file:///c:/Users/chara/.gemini/antigravity-ide/scratch/esp32c6_max98357a_sine/main/app_main.h)**:
+  Header file providing the `app_main_run()` prototype and application lifecycle definitions.
+* **[`main/main.c`](file:///c:/Users/chara/.gemini/antigravity-ide/scratch/esp32c6_max98357a_sine/main/main.c)**:
+  The standard ESP-IDF entry function `app_main()` that invokes `app_main_run()`.
+* **[`main/Kconfig.projbuild`](file:///c:/Users/chara/.gemini/antigravity-ide/scratch/esp32c6_max98357a_sine/main/Kconfig.projbuild)**:
+  Provides menu-driven configuration options for `idf.py menuconfig`, setting default GPIO pins for the Low probe (10), Medium probe (11), Full probe (22), and MAX98357A I2S audio pins (18, 19, 20).
+* **[`main/sinric_ca.pem`](file:///c:/Users/chara/.gemini/antigravity-ide/scratch/esp32c6_max98357a_sine/main/sinric_ca.pem)**:
+  The Root Certificate Authority (CA) certificate used to verify the TLS/SSL security certificate of `ws.sinric.pro` during Google Home WebSocket handshakes.
+* **[`main/CMakeLists.txt`](file:///c:/Users/chara/.gemini/antigravity-ide/scratch/esp32c6_max98357a_sine/main/CMakeLists.txt)**:
+  Registers source files in `main/` and links component dependencies (`drivers`, `cloud`, `services`).
+
+---
+
+### 📂 3. `components/drivers/` — Hardware Sensors & Audio
+
+This component directly interfaces with physical sensors and audio hardware:
+
+* **[`components/drivers/gpio_config.c` & `.h`](file:///c:/Users/chara/.gemini/antigravity-ide/scratch/esp32c6_max98357a_sine/components/drivers/gpio_config.c)**:
+  Configures the physical GPIO pins on the ESP32-C6. Sets `GPIO 10` (Low, 20cm), `GPIO 11` (Med, 55cm), and `GPIO 22` (Full, 90cm) into **floating input mode with pull-ups disabled** by default to completely prevent DC electrolysis current when the sensor is idle.
+* **[`components/drivers/water_sensor.c` & `.h`](file:///c:/Users/chara/.gemini/antigravity-ide/scratch/esp32c6_max98357a_sine/components/drivers/water_sensor.c)**:
+  The core water-sensing engine:
+  1. **Anti-Corrosion Strobe**: Activates internal pull-ups for only **2 ms every 10 seconds** (0.02% duty cycle), takes a reading, and turns them off.
+  2. **Truth Table Bitmask Analysis**: Analyzes the 3-bit GPIO state (`GPIO22:GPIO11:GPIO10`) to calculate exact water levels (0%, 22%, 61%, 100%).
+  3. **Probe Fault Diagnostics**: Detects impossible combinations (e.g. `0b101`, `0b001`, `0b010`) to identify broken or corroded probes at 20 cm or 55 cm.
+  4. **20-Second Debounce**: Requires 2 consecutive identical readings across 20 seconds to eliminate false triggers from water surface waves.
+  5. **Event Broadcasting**: Posts confirmed level changes and fault alerts to `g_audio_queue`, `g_blynk_queue`, and `g_sinric_queue`.
+* **[`components/drivers/audio_player.c` & `.h`](file:///c:/Users/chara/.gemini/antigravity-ide/scratch/esp32c6_max98357a_sine/components/drivers/audio_player.c)**:
+  The I2S audio driver for the MAX98357A amplifier (using `GPIO 19` BCLK, `GPIO 18` LRC, `GPIO 20` DIN). Consumes events from `g_audio_queue`, fetches 16 kHz 16-bit PCM voice data from Flash, scales volume by +6 dB without clipping, and alternates between **English** and **Telugu** voice announcements.
+
+#### 🎵 `components/drivers/audio/` (PCM Voice Data Subfolder)
+* **[`audio_clips.c`](file:///c:/Users/chara/.gemini/antigravity-ide/scratch/esp32c6_max98357a_sine/components/drivers/audio/audio_clips.c)**:
+  The master audio database compiled into Flash. Contains 10 raw 16 kHz 16-bit PCM audio arrays for normal level announcements (*"Tank Empty"*, *"Water Level Low"*, *"Water Level Sixty One Percent"*, *"Tank Full"*) and diagnostic hardware warnings in English and Telugu.
+* **`tank_empty.h` / `water_low.h` / `water_medium.h` / `tank_full.h`**:
+  Header files containing sample count definitions and extern declarations for English voice clips.
+* **`tank_empty_te.c/.h` / `water_low_te.c/.h` / `water_medium_te.c/.h` / `tank_full_te.c/.h`**:
+  Source and header files containing dedicated Telugu voice clips.
+
+---
+
+### 📂 4. `components/cloud/` — Wi-Fi, Blynk IoT & Google Home
+
+This component handles wireless connectivity and cloud synchronization:
+
+* **[`components/cloud/wifi_config.h`](file:///c:/Users/chara/.gemini/antigravity-ide/scratch/esp32c6_max98357a_sine/components/cloud/wifi_config.h)**:
+  Stores configuration parameters including Primary Router credentials (`railwirefibernet`), Secondary Router credentials (`BSNL Fiber`), Blynk Device Auth Token, and Sinric Pro Device IDs.
+* **[`components/cloud/wifi_manager.c` & `.h`](file:///c:/Users/chara/.gemini/antigravity-ide/scratch/esp32c6_max98357a_sine/components/cloud/wifi_manager.c)**:
+  Dual-Router Auto-Failover Wi-Fi manager. Automatically connects to Router #1, fails over to Router #2 if unavailable, and uses exponential backoff with random jitter during power outages. Sets `EVT_WIFI_CONNECTED` once online.
+* **[`components/cloud/wifi_prov.c` & `.h`](file:///c:/Users/chara/.gemini/antigravity-ide/scratch/esp32c6_max98357a_sine/components/cloud/wifi_prov.c)**:
+  Manages Non-Volatile Storage (NVS) flash memory to securely read and write Wi-Fi credentials so the device reconnects automatically after any power cut.
+* **[`components/cloud/blynk_client.c` & `.h`](file:///c:/Users/chara/.gemini/antigravity-ide/scratch/esp32c6_max98357a_sine/components/cloud/blynk_client.c)**:
+  Blynk IoT REST API client. Sends encrypted HTTPS requests to update virtual pins `V0` (Status label), `V1` (Water percentage), `V2` (Low probe state), `V3` (Med probe state), and `V4` (Full probe state). Includes smart push notification filtering to prevent notification spam during routine 15s heartbeats.
+* **[`components/cloud/sinric_client.c` & `.h`](file:///c:/Users/chara/.gemini/antigravity-ide/scratch/esp32c6_max98357a_sine/components/cloud/sinric_client.c)**:
+  Sinric Pro WebSocket client. Opens a secure WSS connection to `ws.sinric.pro`, cryptographically signs data payloads using HMAC-SHA256, and responds to Google Assistant / Google Home voice queries (*"Hey Google, what is the water level?"*).
+
+---
+
+### 📂 5. `components/services/` — System Health & IPC Broker
+
+This component provides background system services and FreeRTOS task coordination:
+
+* **[`components/services/app_events.c` & `.h`](file:///c:/Users/chara/.gemini/antigravity-ide/scratch/esp32c6_max98357a_sine/components/services/app_events.c)**:
+  The FreeRTOS Inter-Process Communication (IPC) Broker:
+  1. Creates dedicated queues (`g_audio_queue`, `g_blynk_queue`, `g_sinric_queue`) so slow network connections never delay local audio announcements.
+  2. Manages system event bits (`EVT_GPIO_READY`, `EVT_I2S_READY`, `EVT_WIFI_CONNECTED`, `EVT_SENSOR_FAULT`).
+  3. Implements `g_tls_handshake_mutex` to serialize HTTPS and WSS cryptographic handshakes, preventing FreeRTOS heap starvation.
+* **[`components/services/sys_diagnostics.c` & `.h`](file:///c:/Users/chara/.gemini/antigravity-ide/scratch/esp32c6_max98357a_sine/components/services/sys_diagnostics.c)**:
+  Real-time system health monitor. Logs a structured diagnostic report every 60 seconds tracking Free RAM Heap, Minimum Free Heap (memory leak detection), Wi-Fi RSSI signal strength (in dBm), and system Uptime.
+* **[`components/services/night_sleep.c` & `.h`](file:///c:/Users/chara/.gemini/antigravity-ide/scratch/esp32c6_max98357a_sine/components/services/night_sleep.c)**:
+  Nighttime power manager configured for Indian Standard Time (IST). Suppresses non-critical audio alerts during quiet hours to conserve power and avoid disturbing household members.
 
 ---
 
